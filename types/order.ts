@@ -1,4 +1,5 @@
 export interface AdminOrderItem {
+
   _id?: string;
 
   product: string;
@@ -10,14 +11,37 @@ export interface AdminOrderItem {
   quantity: number;
 
   image: string;
+
 }
+
+
+
+
+
+export interface CreateOrderItem {
+
+  product:string;
+
+  quantity:number;
+
+}
+
+
+
 
 
 export interface ShippingAddress {
-  address: string;
-  city: string;
-  phone: string;
+
+  address:string;
+
+  city:string;
+
+  phone:string;
+
 }
+
+
+
 
 
 export type OrderStatus =
@@ -27,28 +51,77 @@ export type OrderStatus =
   | "Cancelled";
 
 
-export interface AdminOrder {
-  _id: string;
 
-  user?: {
-    _id: string;
-    name: string;
-    email: string;
+
+
+export interface CreateOrderPayload {
+
+
+  items: CreateOrderItem[];
+
+
+  shippingAddress:ShippingAddress;
+
+
+  paymentMethod:
+  "COD" | "STRIPE";
+
+
+}
+
+
+
+
+
+export interface AdminOrder {
+
+
+  _id:string;
+
+
+
+  user?:{
+
+    _id:string;
+
+    name:string;
+
+    email:string;
+
   };
 
-  orderItems: AdminOrderItem[];
 
-  shippingAddress: ShippingAddress;
 
-  paymentMethod: "COD" | "STRIPE";
+  orderItems:AdminOrderItem[];
 
-  totalPrice: number;
 
-  isPaid: boolean;
 
-  status: OrderStatus;
+  shippingAddress:ShippingAddress;
 
-  createdAt: string;
 
-  updatedAt: string;
+
+  paymentMethod:
+  "COD" | "STRIPE";
+
+
+
+  totalPrice:number;
+
+
+
+  isPaid:boolean;
+
+
+
+  status:OrderStatus;
+
+
+
+  createdAt:string;
+
+
+
+  updatedAt:string;
+
+
 }

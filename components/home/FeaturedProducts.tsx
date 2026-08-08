@@ -60,7 +60,7 @@ export default function FeaturedProducts({
 
           <p
             className="
-              mt-2
+              my-3
               max-w-xl
               text-xs
               leading-5

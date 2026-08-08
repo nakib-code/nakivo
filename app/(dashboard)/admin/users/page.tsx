@@ -3,7 +3,6 @@
 import Image from "next/image";
 
 import {
-  Users,
   Loader2,
   ShieldCheck,
   User,
@@ -44,22 +43,21 @@ export default function AdminUsersPage() {
     status:string
   )=>{
 
-
     updateUser.mutate({
 
       id,
 
       data:{
         status:
-        status === "active"
-        ? "blocked"
-        : "active",
+          status === "active"
+          ? "blocked"
+          : "active",
       },
 
     });
 
-
   };
+
 
 
 
@@ -68,7 +66,6 @@ export default function AdminUsersPage() {
   const handleMakeAdmin = (
     id:string
   )=>{
-
 
     updateUser.mutate({
 
@@ -80,8 +77,8 @@ export default function AdminUsersPage() {
 
     });
 
-
   };
+
 
 
 
@@ -92,20 +89,22 @@ export default function AdminUsersPage() {
   )=>{
 
 
-    const confirm =
+    const confirmDelete =
       window.confirm(
         "Are you sure you want to delete this user?"
       );
 
 
-    if(!confirm)
+    if(!confirmDelete)
       return;
+
 
 
     deleteUser.mutate(id);
 
-
   };
+
+
 
 
 
@@ -115,9 +114,20 @@ export default function AdminUsersPage() {
 
     return (
 
-      <div className="flex h-96 items-center justify-center">
+      <div className="
+        flex
+        h-96
+        items-center
+        justify-center
+      ">
 
-        <Loader2 className="h-8 w-8 animate-spin"/>
+        <Loader2
+          className="
+            h-8
+            w-8
+            animate-spin
+          "
+        />
 
       </div>
 
@@ -129,11 +139,16 @@ export default function AdminUsersPage() {
 
 
 
+
   if(isError){
 
     return (
 
-      <div className="rounded-xl border p-6">
+      <div className="
+        rounded-xl
+        border
+        p-6
+      ">
 
         Failed to load users
 
@@ -148,25 +163,30 @@ export default function AdminUsersPage() {
 
 
 
-
   return (
 
     <div className="space-y-6">
+
 
 
       {/* Header */}
 
       <div>
 
-        <h1 className="text-2xl font-bold">
+        <h1 className="
+          text-2xl
+          font-bold
+        ">
           Users Management
         </h1>
 
 
-        <p className="text-sm text-muted-foreground">
+        <p className="
+          text-sm
+          text-muted-foreground
+        ">
           Manage customers and admins
         </p>
-
 
       </div>
 
@@ -178,21 +198,33 @@ export default function AdminUsersPage() {
 
       {/* Stats */}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="
+        grid
+        gap-4
+        sm:grid-cols-3
+      ">
 
 
 
-        <div className="rounded-xl border bg-white p-5">
+        <div className="
+          rounded-xl
+          border
+          bg-white
+          p-5
+        ">
 
           <p className="text-sm text-slate-500">
             Total Users
           </p>
 
 
-          <p className="mt-1 text-2xl font-bold">
+          <p className="
+            mt-1
+            text-2xl
+            font-bold
+          ">
             {users.length}
           </p>
-
 
         </div>
 
@@ -200,14 +232,24 @@ export default function AdminUsersPage() {
 
 
 
-        <div className="rounded-xl border bg-white p-5">
+
+        <div className="
+          rounded-xl
+          border
+          bg-white
+          p-5
+        ">
 
           <p className="text-sm text-slate-500">
             Customers
           </p>
 
 
-          <p className="mt-1 text-2xl font-bold">
+          <p className="
+            mt-1
+            text-2xl
+            font-bold
+          ">
 
             {
               users.filter(
@@ -218,22 +260,30 @@ export default function AdminUsersPage() {
 
           </p>
 
-
         </div>
 
 
 
 
 
-        <div className="rounded-xl border bg-white p-5">
 
+        <div className="
+          rounded-xl
+          border
+          bg-white
+          p-5
+        ">
 
           <p className="text-sm text-slate-500">
             Admins
           </p>
 
 
-          <p className="mt-1 text-2xl font-bold">
+          <p className="
+            mt-1
+            text-2xl
+            font-bold
+          ">
 
             {
               users.filter(
@@ -244,8 +294,8 @@ export default function AdminUsersPage() {
 
           </p>
 
-
         </div>
+
 
 
       </div>
@@ -261,21 +311,29 @@ export default function AdminUsersPage() {
       {/* Table */}
 
 
-      <div className="overflow-hidden rounded-xl border bg-white">
+      <div className="
+        overflow-hidden
+        rounded-xl
+        border
+        bg-white
+      ">
 
 
         <div className="overflow-x-auto">
 
 
-          <table className="w-full text-sm">
+          <table className="
+            w-full
+            text-sm
+          ">
 
 
-
-            <thead className="border-b bg-slate-50">
-
+            <thead className="
+              border-b
+              bg-slate-50
+            ">
 
               <tr>
-
 
                 <th className="px-5 py-4 text-left">
                   User
@@ -316,76 +374,111 @@ export default function AdminUsersPage() {
 
 
 
-
-
             <tbody>
 
 
             {
               users.map(
-                user => (
+                (user)=>(
 
 
                 <tr
-                  key={user._id}
-                  className="border-b last:border-0"
+
+                  key={
+                    user._id.toString()
+                  }
+
+                  className="
+                    border-b
+                    last:border-0
+                  "
+
                 >
 
 
 
                   {/* User */}
 
+                  <td className="
+                    px-5
+                    py-4
+                  ">
 
-                  <td className="px-5 py-4">
+
+                    <div className="
+                      flex
+                      items-center
+                      gap-3
+                    ">
 
 
-                    <div className="flex items-center gap-3">
 
-
-                      <div className="relative h-10 w-10 overflow-hidden rounded-full bg-slate-100">
+                      <div className="
+                        relative
+                        h-10
+                        w-10
+                        overflow-hidden
+                        rounded-full
+                        bg-slate-100
+                      ">
 
 
                       {
                         user.image ? (
 
-
                           <Image
 
                             src={user.image}
 
-                            alt={user.name}
+                            alt={
+                              user.name ||
+                              "User"
+                            }
 
                             fill
 
-                            className="object-cover"
+                            className="
+                              object-cover
+                            "
 
                           />
 
+                        ):(
 
-                        ) : (
+                          <div className="
+                            flex
+                            h-full
+                            items-center
+                            justify-center
+                          ">
 
-
-                          <div className="flex h-full items-center justify-center">
-
-                            <User className="h-5 w-5"/>
+                            <User
+                              className="
+                                h-5
+                                w-5
+                              "
+                            />
 
                           </div>
 
-
                         )
                       }
-
 
 
                       </div>
 
 
 
-                      <span className="font-medium">
+
+
+                      <span className="
+                        font-medium
+                      ">
 
                         {user.name}
 
                       </span>
+
 
 
                     </div>
@@ -397,8 +490,9 @@ export default function AdminUsersPage() {
 
 
 
-                  {/* Email */}
 
+
+                  {/* Email */}
 
                   <td className="px-5 py-4">
 
@@ -411,8 +505,10 @@ export default function AdminUsersPage() {
 
 
 
-                  {/* Role */}
 
+
+
+                  {/* Role */}
 
                   <td className="px-5 py-4">
 
@@ -423,14 +519,26 @@ export default function AdminUsersPage() {
                     ?
 
                     <Badge>
-                      <ShieldCheck className="mr-1 h-3 w-3"/>
+
+                      <ShieldCheck
+                        className="
+                          mr-1
+                          h-3
+                          w-3
+                        "
+                      />
+
                       Admin
+
                     </Badge>
+
 
                     :
 
                     <Badge variant="secondary">
+
                       Customer
+
                     </Badge>
 
                   }
@@ -444,8 +552,9 @@ export default function AdminUsersPage() {
 
 
 
-                  {/* Status */}
 
+
+                  {/* Status */}
 
                   <td className="px-5 py-4">
 
@@ -456,14 +565,18 @@ export default function AdminUsersPage() {
                     ?
 
                     <Badge variant="destructive">
+
                       Blocked
+
                     </Badge>
 
 
                     :
 
                     <Badge variant="outline">
+
                       Active
+
                     </Badge>
 
                   }
@@ -477,10 +590,15 @@ export default function AdminUsersPage() {
 
 
 
+
+
                   {/* Provider */}
 
-
-                  <td className="px-5 py-4 capitalize">
+                  <td className="
+                    px-5
+                    py-4
+                    capitalize
+                  ">
 
                     {user.provider}
 
@@ -493,33 +611,50 @@ export default function AdminUsersPage() {
 
 
 
+
                   {/* Actions */}
 
+                  <td className="
+                    px-5
+                    py-4
+                  ">
 
-                  <td className="px-5 py-4">
 
-
-                    <div className="flex gap-2">
+                    <div className="
+                      flex
+                      gap-2
+                    ">
 
 
 
                       <button
 
-                        onClick={() =>
+                        onClick={()=> 
                           handleBlock(
-                            user._id,
+                            user._id.toString(),
                             user.status
                           )
                         }
 
-                        className="rounded-lg border p-2"
+                        className="
+                          rounded-lg
+                          border
+                          p-2
+                        "
 
                       >
 
-                        <UserX className="h-4 w-4"/>
-
+                        <UserX
+                          className="
+                            h-4
+                            w-4
+                          "
+                        />
 
                       </button>
+
+
+
 
 
 
@@ -528,22 +663,30 @@ export default function AdminUsersPage() {
                       {
                         user.role !== "admin" && (
 
-                        <button
+                          <button
 
-                          onClick={() =>
-                            handleMakeAdmin(
-                              user._id
-                            )
-                          }
+                            onClick={()=>
+                              handleMakeAdmin(
+                                user._id.toString()
+                              )
+                            }
 
-                          className="rounded-lg border p-2"
+                            className="
+                              rounded-lg
+                              border
+                              p-2
+                            "
 
-                        >
+                          >
 
-                          <ShieldCheck className="h-4 w-4"/>
+                            <ShieldCheck
+                              className="
+                                h-4
+                                w-4
+                              "
+                            />
 
-
-                        </button>
+                          </button>
 
                         )
                       }
@@ -552,22 +695,35 @@ export default function AdminUsersPage() {
 
 
 
+
+
+
                       <button
 
-                        onClick={() =>
+                        onClick={()=>
                           handleDelete(
-                            user._id
+                            user._id.toString()
                           )
                         }
 
-                        className="rounded-lg border p-2 text-red-600"
+                        className="
+                          rounded-lg
+                          border
+                          p-2
+                          text-red-600
+                        "
 
                       >
 
-                        <Trash2 className="h-4 w-4"/>
-
+                        <Trash2
+                          className="
+                            h-4
+                            w-4
+                          "
+                        />
 
                       </button>
+
 
 
 
@@ -576,6 +732,7 @@ export default function AdminUsersPage() {
 
 
                   </td>
+
 
 
 

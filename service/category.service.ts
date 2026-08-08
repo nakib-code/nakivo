@@ -104,3 +104,34 @@ export async function deleteCategory(id: string) {
 
   return category;
 }
+
+
+export async function getCategories(){
+
+ const res = await fetch(
+   "/api/categories"
+ );
+
+
+ const json = await res.json();
+
+
+ console.log(
+   "API RESPONSE:",
+   json
+ );
+
+
+ if(!res.ok){
+
+   throw new Error(
+    json.message || 
+    "Failed to fetch categories"
+   );
+
+ }
+
+
+ return json.data;
+
+}

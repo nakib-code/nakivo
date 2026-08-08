@@ -5,69 +5,114 @@ import Order from "@/models/Order";
 
 
 export async function PATCH(
- req: NextRequest,
- context: {
-  params:{
-    id:string;
+  req: NextRequest,
+  {
+    params,
+  }: {
+    params: Promise<{
+      id: string;
+    }>;
   }
- }
-){
+) {
 
- try{
-
-  await connectDB();
+  try {
 
 
-  const {
-    status
-  } = await req.json();
+    await connectDB();
 
 
-  const order =
-    await Order.findByIdAndUpdate(
-      context.params.id,
+    const { id } = await params;
+
+
+    const {
+      status,
+    } = await req.json();
+
+
+
+    if(!status){
+
+      return NextResponse.json(
+        {
+          success:false,
+          message:"Status is required",
+        },
+        {
+          status:400,
+        }
+      );
+
+    }
+
+
+
+
+
+    const order =
+      await Order.findByIdAndUpdate(
+        id,
+        {
+          status,
+        },
+        {
+          new:true,
+        }
+      );
+
+
+
+
+
+    if(!order){
+
+      return NextResponse.json(
+        {
+          success:false,
+          message:"Order not found",
+        },
+        {
+          status:404,
+        }
+      );
+
+    }
+
+
+
+
+
+    return NextResponse.json(
       {
-        status,
+        success:true,
+        data:order,
       },
       {
-        new:true,
+        status:200,
       }
     );
 
 
-  if(!order){
+
+  } catch(error){
+
+
+    console.error(
+      "Update Order Error:",
+      error
+    );
+
 
     return NextResponse.json(
       {
         success:false,
-        message:"Order not found",
+        message:"Failed to update order",
       },
       {
-        status:404,
+        status:500,
       }
     );
 
+
   }
-
-
-  return NextResponse.json({
-    success:true,
-    data:order,
-  });
-
-
- }catch(error){
-
-  return NextResponse.json(
-    {
-      success:false,
-      message:"Failed to update order",
-    },
-    {
-      status:500,
-    }
-  );
-
- }
 
 }

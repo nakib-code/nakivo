@@ -40,6 +40,11 @@ const menuItems = [
     href: "/admin/users",
     icon: Users,
   },
+  {
+    label: "Hero",
+    href: "/admin/hero",
+    icon: Users,
+  },
 ];
 
 export default function AdminSidebar() {

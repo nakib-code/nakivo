@@ -1,52 +1,177 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 
-const categories = [
-  {
-    title: "Fashion",
-    items: ["Men", "Women", "Kids", "Bags"],
-  },
-  {
-    title: "Electronics",
-    items: ["Laptop", "Mobile", "Camera", "Accessories"],
-  },
-  {
-    title: "Shoes",
-    items: ["Sneakers", "Sports", "Boots", "Sandals"],
-  },
-  {
-    title: "Beauty",
-    items: ["Skincare", "Perfume", "Makeup", "Hair Care"],
-  },
-];
+import { useCategories } from "@/hooks/useCategories";
 
-export default function CategoryMegaMenu() {
-  return (
-<div className="invisible absolute left-1/2 top-full z-50 mt-6 w-[820px] -translate-x-1/2 rounded-3xl border border-slate-200 bg-white p-8 opacity-0 shadow-[0_20px_60px_rgba(0,0,0,0.12)] transition-all duration-300 group-hover:visible group-hover:translate-y-0 group-hover:scale-100 group-hover:opacity-100 translate-y-4 scale-95">
-      <div className="grid grid-cols-4 gap-8">
 
-        {categories.map((category) => (
-          <div key={category.title}>
-            <h3 className="mb-4 text-base font-bold text-slate-900">
-              {category.title}
-            </h3>
+export default function CategoryMegaMenu(){
 
-            <div className="space-y-2">
-              {category.items.map((item) => (
-                <Link
-                  key={item}
-                  href={`/products?category=${item}`}
-                  className="block rounded-lg px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100 hover:text-black"
-                >
-                  {item}
-                </Link>
-              ))}
-            </div>
-          </div>
-        ))}
 
-      </div>
-    </div>
-  );
+const {
+ data: categories=[],
+ isLoading,
+ isError
+}=useCategories();
+
+
+
+if(isLoading){
+
+return (
+
+<div className="
+grid
+grid-cols-2
+gap-3
+">
+
+{
+Array.from({length:4}).map((_,i)=>(
+
+<div
+key={i}
+className="
+h-16
+animate-pulse
+rounded-xl
+bg-slate-100
+"
+/>
+
+))
+}
+
+</div>
+
+);
+
+}
+
+
+
+if(isError){
+
+return (
+
+<div className="
+text-sm
+text-red-500
+">
+
+Failed to load categories
+
+</div>
+
+);
+
+}
+
+
+
+return (
+
+<div className="
+grid
+grid-cols-2
+gap-3
+md:grid-cols-3
+">
+
+{
+categories.map((category:any)=>(
+
+
+<Link
+
+key={category._id}
+
+href={`/products?category=${category.slug}`}
+
+className="
+flex
+items-center
+gap-3
+rounded-xl
+border
+p-3
+transition
+hover:bg-slate-50
+"
+
+>
+
+
+<div
+
+className="
+relative
+h-10
+w-10
+overflow-hidden
+rounded-full
+bg-slate-100
+shrink-0
+"
+
+>
+
+<Image
+
+src={category.image}
+
+alt={category.name}
+
+fill
+
+sizes="40px"
+
+className="
+object-cover
+"
+
+/>
+
+</div>
+
+
+
+<div>
+
+<h3 className="
+text-sm
+font-semibold
+">
+
+{category.name}
+
+</h3>
+
+
+<p className="
+text-xs
+text-slate-500
+line-clamp-1
+">
+
+{category.description}
+
+</p>
+
+
+</div>
+
+
+</Link>
+
+
+))
+}
+
+
+</div>
+
+);
+
 }
