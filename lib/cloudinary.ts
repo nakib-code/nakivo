@@ -10,42 +10,104 @@ cloudinary.config({
 export async function uploadToCloudinary(
   file: File,
   folder = "ecommerce/products"
-) {
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
+): Promise<{
+  secure_url: string;
+  public_id: string;
+}> {
+  try {
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
 
-  return new Promise<{
-    secure_url: string;
-    public_id: string;
-  }>((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder,
-        resource_type: "image",
-      },
-      (error, result) => {
-        if (error) {
-          reject(error);
-          return;
-        }
+    return await new Promise((resolve, reject) => {
+      const uploadStream =
+        cloudinary.uploader.upload_stream(
+          {
+            folder,
+            resource_type: "image",
+          },
+          (error, result) => {
+            if (error) {
+              console.error(
+                "========== CLOUDINARY UPLOAD ERROR =========="
+              );
 
-        if (!result) {
-          reject(new Error("Cloudinary upload failed"));
-          return;
-        }
+              console.error(error);
 
-        resolve({
-          secure_url: result.secure_url,
-          public_id: result.public_id,
-        });
-      }
+              console.error(
+                "============================================="
+              );
+
+              reject(
+                new Error(
+                  error.message ||
+                    "Cloudinary image upload failed"
+                )
+              );
+
+              return;
+            }
+
+            if (!result) {
+              reject(
+                new Error(
+                  "Cloudinary returned no upload result"
+                )
+              );
+
+              return;
+            }
+
+            if (!result.secure_url) {
+              reject(
+                new Error(
+                  "Cloudinary upload completed but no secure URL was returned"
+                )
+              );
+
+              return;
+            }
+
+            resolve({
+              secure_url: result.secure_url,
+              public_id: result.public_id,
+            });
+          }
+        );
+
+      uploadStream.on("error", (error) => {
+        console.error(
+          "Cloudinary Stream Error:",
+          error
+        );
+
+        reject(
+          new Error(
+            error instanceof Error
+              ? error.message
+              : "Cloudinary upload stream failed"
+          )
+        );
+      });
+
+      uploadStream.end(buffer);
+    });
+  } catch (error) {
+    console.error(
+      "Cloudinary Upload Function Error:",
+      error
     );
 
-    uploadStream.end(buffer);
-  });
+    throw new Error(
+      error instanceof Error
+        ? error.message
+        : "Image upload failed"
+    );
+  }
 }
 
-export async function deleteFromCloudinary(publicId: string) {
+export async function deleteFromCloudinary(
+  publicId: string
+) {
   return cloudinary.uploader.destroy(publicId);
 }
 

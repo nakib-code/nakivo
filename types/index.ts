@@ -20,17 +20,31 @@ export interface IUser extends Document {
 }
 
 // Product Types
-export interface IProduct extends Document {
-  _id: Types.ObjectId;
+export interface IProductImage {
+  url: string;
+  publicId: string;
+}
+
+export interface IProduct {
+  _id?: string;
+
   title: string;
+
   description: string;
+
   price: number;
+
   category: string;
+
   stock: number;
-  images: string[];
+
+  images: IProductImage[];
+
   ratings: number;
-  createdAt: Date;
-  updatedAt: Date;
+
+  createdAt?: Date;
+
+  updatedAt?: Date;
 }
 
 // Order Types

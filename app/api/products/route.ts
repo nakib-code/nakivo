@@ -2,155 +2,172 @@ import { NextRequest, NextResponse } from "next/server";
 
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
-import {
-  uploadToCloudinary,
-  deleteFromCloudinary,
-} from "@/lib/cloudinary";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 
-interface RouteParams {
-  params: Promise<{ id: string }>;
-}
+// ========================================
+// GET PRODUCTS
+// ========================================
 
-// =========================
-// GET SINGLE PRODUCT
-// =========================
-
-export async function GET(
-  _req: NextRequest,
-  { params }: RouteParams
-) {
+export async function GET(req: NextRequest) {
   try {
     await connectDB();
 
-    const { id } = await params;
+    const { searchParams } = new URL(req.url);
 
-    const product = await Product.findById(id);
+    const category = searchParams.get("category");
+    const search = searchParams.get("search");
 
-    if (!product) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Product not found",
-        },
-        { status: 404 }
-      );
+    const query: Record<string, unknown> = {};
+
+    if (category) {
+      query.category = category;
     }
+
+    if (search) {
+      query.title = {
+        $regex: search,
+        $options: "i",
+      };
+    }
+
+    const products = await Product.find(query).sort({
+      createdAt: -1,
+    });
 
     return NextResponse.json(
       {
         success: true,
-        data: product,
+        data: products,
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error("GET Product Error:", error);
+    console.error("GET Products Error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to fetch product",
+        message: "Failed to fetch products",
       },
       { status: 500 }
     );
   }
 }
 
-// =========================
-// UPDATE PRODUCT
-// =========================
+// ========================================
+// CREATE PRODUCT
+// ========================================
 
-export async function PUT(
-  req: NextRequest,
-  { params }: RouteParams
-) {
+export async function POST(req: NextRequest) {
   try {
     await connectDB();
 
-    const { id } = await params;
-
-    const product = await Product.findById(id);
-
-    if (!product) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Product not found",
-        },
-        { status: 404 }
-      );
-    }
+    // ========================================
+    // Get FormData
+    // ========================================
 
     const formData = await req.formData();
 
-    // =========================
-    // Product Fields
-    // =========================
-
     const title = formData.get("title")?.toString().trim();
+
     const description = formData
       .get("description")
       ?.toString()
       .trim();
 
-    const category = formData.get("category")?.toString().trim();
-
     const priceValue = formData.get("price")?.toString();
+
+    const category = formData
+      .get("category")
+      ?.toString()
+      .trim();
+
     const stockValue = formData.get("stock")?.toString();
 
-    // =========================
-    // Prepare Update Data
-    // =========================
+    // ========================================
+    // Validate Basic Fields
+    // ========================================
 
-    const updateData: Record<string, unknown> = {};
-
-    if (title) {
-      updateData.title = title;
+    if (!title) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Product title is required",
+        },
+        { status: 400 }
+      );
     }
 
-    if (description) {
-      updateData.description = description;
+    if (!description) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Product description is required",
+        },
+        { status: 400 }
+      );
     }
 
-    if (category) {
-      updateData.category = category;
+    if (!priceValue) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Product price is required",
+        },
+        { status: 400 }
+      );
     }
 
-    if (priceValue !== undefined) {
-      const price = Number(priceValue);
-
-      if (Number.isNaN(price) || price < 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Invalid price",
-          },
-          { status: 400 }
-        );
-      }
-
-      updateData.price = price;
+    if (!category) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Product category is required",
+        },
+        { status: 400 }
+      );
     }
 
-    if (stockValue !== undefined) {
-      const stock = Number(stockValue);
-
-      if (Number.isNaN(stock) || stock < 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Invalid stock",
-          },
-          { status: 400 }
-        );
-      }
-
-      updateData.stock = stock;
+    if (stockValue === undefined) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Product stock is required",
+        },
+        { status: 400 }
+      );
     }
 
-    // =========================
-    // Get New Images
-    // =========================
+    // ========================================
+    // Convert Number Values
+    // ========================================
+
+    const price = Number(priceValue);
+    const stock = Number(stockValue);
+
+    if (!Number.isFinite(price) || price < 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid product price",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!Number.isInteger(stock) || stock < 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid product stock",
+        },
+        { status: 400 }
+      );
+    }
+
+    // ========================================
+    // Get Images
+    // ========================================
 
     const imageEntries = formData.getAll("images");
 
@@ -159,46 +176,64 @@ export async function PUT(
         item instanceof File && item.size > 0
     );
 
-    // =========================
-    // If New Images Provided
-    // =========================
+    // ========================================
+    // Validate Image Count
+    // ========================================
 
-    if (imageFiles.length > 0) {
-      if (imageFiles.length > 5) {
+    if (imageFiles.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "At least one product image is required",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (imageFiles.length > 5) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Maximum 5 images are allowed",
+        },
+        { status: 400 }
+      );
+    }
+
+    // ========================================
+    // Validate Images
+    // ========================================
+
+    for (const file of imageFiles) {
+      if (!file.type.startsWith("image/")) {
         return NextResponse.json(
           {
             success: false,
-            message: "Maximum 5 images are allowed",
+            message: `${file.name} is not a valid image`,
           },
           { status: 400 }
         );
       }
 
-      // Validate images
-      for (const file of imageFiles) {
-        if (!file.type.startsWith("image/")) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: `${file.name} is not a valid image`,
-            },
-            { status: 400 }
-          );
-        }
-
-        if (file.size > 5 * 1024 * 1024) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: `${file.name} is larger than 5MB`,
-            },
-            { status: 400 }
-          );
-        }
+      if (file.size > 5 * 1024 * 1024) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `${file.name} is larger than 5MB`,
+          },
+          { status: 400 }
+        );
       }
+    }
 
-      // Upload new images
-      const uploadedImages = await Promise.all(
+    // ========================================
+    // Upload Images To Cloudinary
+    // ========================================
+
+    let uploadedImages;
+
+    try {
+      uploadedImages = await Promise.all(
         imageFiles.map((file) =>
           uploadToCloudinary(
             file,
@@ -206,179 +241,89 @@ export async function PUT(
           )
         )
       );
-
-      const newImageUrls = uploadedImages.map(
-        (image) => image.secure_url
+    } catch (error) {
+      console.error(
+        "Cloudinary Upload Error:",
+        error
       );
 
-      // Delete old Cloudinary images
-      // NOTE:
-      // Current Product model stores only URLs,
-      // so public_id needs to be extracted.
-      for (const imageUrl of product.images) {
-        try {
-          const publicId = extractCloudinaryPublicId(imageUrl);
-
-          if (publicId) {
-            await deleteFromCloudinary(publicId);
-          }
-        } catch (error) {
-          console.error(
-            "Old Cloudinary image delete error:",
-            error
-          );
-        }
-      }
-
-      updateData.images = newImageUrls;
-    }
-
-    // =========================
-    // Update Product
-    // =========================
-
-    const updatedProduct =
-      await Product.findByIdAndUpdate(
-        id,
-        updateData,
-        {
-          new: true,
-          runValidators: true,
-        }
-      );
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Product updated successfully",
-        data: updatedProduct,
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("PUT Product Error:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Failed to update product",
-      },
-      { status: 500 }
-    );
-  }
-}
-
-// =========================
-// DELETE PRODUCT
-// =========================
-
-export async function DELETE(
-  _req: NextRequest,
-  { params }: RouteParams
-) {
-  try {
-    await connectDB();
-
-    const { id } = await params;
-
-    const product = await Product.findById(id);
-
-    if (!product) {
       return NextResponse.json(
         {
           success: false,
-          message: "Product not found",
+          message:
+            error instanceof Error
+              ? `Image upload failed: ${error.message}`
+              : "Image upload failed",
         },
-        { status: 404 }
+        { status: 500 }
       );
     }
 
-    // =========================
-    // Delete Images From Cloudinary
-    // =========================
+    // ========================================
+    // IMPORTANT
+    //
+    // Product model expects:
+    //
+    // images: [
+    //   {
+    //     url: "...",
+    //     publicId: "..."
+    //   }
+    // ]
+    //
+    // NOT:
+    //
+    // images: [
+    //   "https://..."
+    // ]
+    // ========================================
 
-    for (const imageUrl of product.images) {
-      try {
-        const publicId = extractCloudinaryPublicId(imageUrl);
+    const images = uploadedImages.map((image) => ({
+      url: image.secure_url,
+      publicId: image.public_id,
+    }));
 
-        if (publicId) {
-          await deleteFromCloudinary(publicId);
-        }
-      } catch (error) {
-        console.error(
-          "Cloudinary delete error:",
-          error
-        );
-      }
-    }
+    // ========================================
+    // Create Product
+    // ========================================
 
-    // =========================
-    // Delete Product
-    // =========================
+    const product = await Product.create({
+      title,
+      description,
+      price,
+      category,
+      stock,
+      images,
+      ratings: 0,
+    });
 
-    await Product.findByIdAndDelete(id);
+    // ========================================
+    // Response
+    // ========================================
 
     return NextResponse.json(
       {
         success: true,
-        message: "Product deleted successfully",
+        message: "Product created successfully",
+        data: product,
       },
-      { status: 200 }
+      { status: 201 }
     );
   } catch (error) {
-    console.error("DELETE Product Error:", error);
+    console.error(
+      "POST Product Error:",
+      error
+    );
 
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to delete product",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to create product",
       },
       { status: 500 }
     );
-  }
-}
-
-// =========================
-// CLOUDINARY PUBLIC ID HELPER
-// =========================
-
-function extractCloudinaryPublicId(
-  imageUrl: string
-): string | null {
-  try {
-    const url = new URL(imageUrl);
-
-    const parts = url.pathname.split("/");
-
-    const uploadIndex = parts.indexOf("upload");
-
-    if (uploadIndex === -1) {
-      return null;
-    }
-
-    let publicIdParts = parts.slice(
-      uploadIndex + 1
-    );
-
-    // Remove transformations
-    if (
-      publicIdParts[0]?.startsWith("v")
-    ) {
-      publicIdParts = publicIdParts.slice(1);
-    }
-
-    // Remove version if present
-    if (
-      publicIdParts[0]?.match(/^v\d+$/)
-    ) {
-      publicIdParts = publicIdParts.slice(1);
-    }
-
-    const publicId = publicIdParts.join("/");
-
-    // Remove extension
-    return publicId.replace(/\.[^/.]+$/, "");
-  } catch {
-    return null;
   }
 }
