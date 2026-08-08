@@ -1,16 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Search, ShoppingBag } from "lucide-react";
+
 import { useCartStore } from "@/store/useCartStore";
 import { Input } from "@/components/ui/input";
-import { Search, ShoppingBag } from "lucide-react";
+
 import UserProfileDropdown from "./UserProfileDropdown";
 import CategoryBar from "./CategoryBar";
 
-
 export default function Navbar() {
-  const getTotalItems = useCartStore((state) => state.getTotalItems);
+  const getTotalItems = useCartStore(
+    (state) => state.getTotalItems
+  );
+
   const [mounted, setMounted] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -18,59 +22,75 @@ export default function Navbar() {
     setMounted(true);
   }, []);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const totalItems = mounted ? getTotalItems() : 0;
+
+  const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      alert(`Searching for: ${searchQuery}`);
-    }
+
+    const query = searchQuery.trim();
+
+    if (!query) return;
+
+    window.location.href = `/products?search=${encodeURIComponent(query)}`;
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-4">
-          
-          {/* Logo */}
-          <Link href="/" className="text-2xl font-black tracking-tight text-black flex items-center">
-            STORE<span className="text-blue-600">.</span>
+    <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur">
+      {/* Main Navbar */}
+      <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
+        {/* Logo */}
+        <Link
+          href="/"
+          className="shrink-0 text-2xl font-black tracking-tight text-black"
+        >
+          STORE<span className="text-blue-600">.</span>
+        </Link>
+
+        {/* Search */}
+        <form
+          onSubmit={handleSearch}
+          className="relative hidden flex-1 md:flex md:max-w-xl"
+        >
+          <Input
+            type="search"
+            placeholder="Search products, brands and categories..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-10 rounded-full bg-slate-50 pr-12 focus-visible:ring-black"
+          />
+
+          <button
+            type="submit"
+            aria-label="Search products"
+            className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-black text-white transition hover:bg-slate-800"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+        </form>
+
+        {/* Actions */}
+        <div className="ml-auto flex items-center gap-2 sm:gap-4">
+          {/* Cart */}
+          <Link
+            href="/cart"
+            aria-label="Shopping cart"
+            className="relative flex h-10 w-10 items-center justify-center rounded-full text-slate-800 transition hover:bg-slate-100"
+          >
+            <ShoppingBag className="h-5 w-5" />
+
+            {totalItems > 0 && (
+              <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">
+                {totalItems > 99 ? "99+" : totalItems}
+              </span>
+            )}
           </Link>
 
-          {/* Search Bar */}
-          <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-xl items-center relative">
-            <Input
-              type="text"
-              placeholder="Search products, brands and categories..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10 rounded-full bg-slate-50 focus-visible:ring-black"
-            />
-            <button
-              type="submit"
-              className="absolute right-1.5 p-1.5 bg-black text-white rounded-full hover:bg-slate-800 transition"
-            >
-              <Search className="h-3.5 w-3.5" />
-            </button>
-          </form>
-
-          {/* Action Icons */}
-          <div className="flex items-center space-x-5">
-            {/* Cart Icon */}
-            <Link href="/cart" className="relative p-2 text-slate-800 hover:text-black transition">
-              <ShoppingBag className="h-6 w-6" />
-              {mounted && getTotalItems() > 0 && (
-                <span className="absolute top-0 right-0 bg-blue-600 text-white text-[10px] font-extrabold h-4 w-4 flex items-center justify-center rounded-full shadow">
-                  {getTotalItems()}
-                </span>
-              )}
-            </Link>
-
-            {/* Profile Dropdown */}
-            <UserProfileDropdown />
-          </div>
-
+          {/* User */}
+          <UserProfileDropdown />
         </div>
       </div>
 
+      {/* Categories */}
       <CategoryBar />
     </header>
   );

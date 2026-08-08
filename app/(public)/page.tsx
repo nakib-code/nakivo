@@ -3,7 +3,7 @@
 import { useGetProducts } from "@/hooks/useProducts";
 import { useCartStore } from "@/store/useCartStore";
 import Link from "next/link";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 
 export default function HomePage() {
   const { data: products, isLoading, isError } = useGetProducts();

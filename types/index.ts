@@ -3,10 +3,18 @@ import { Document, Types } from "mongoose";
 // User Types
 export interface IUser extends Document {
   _id: Types.ObjectId;
+
   name: string;
   email: string;
+
   password?: string;
+
+  image?: string;
+
   role: "customer" | "admin";
+
+  provider: "credentials" | "google";
+
   createdAt: Date;
   updatedAt: Date;
 }

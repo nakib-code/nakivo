@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useCartStore } from "@/store/useCartStore";
 import { useCreateOrder } from "@/hooks/useOrders";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 
 export default function CheckoutPage() {
   const { cart, getTotalPrice, clearCart } = useCartStore();
@@ -26,7 +26,7 @@ export default function CheckoutPage() {
     e.preventDefault();
 
     if (!shipping.phone || !shipping.street || !shipping.city) {
-      toast.error("Please fill in all shipping details!");
+      toast("Please fill in all shipping details!");
       return;
     }
 

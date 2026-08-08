@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useSession, signOut } from "next-auth/react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { signOut, useSession } from "next-auth/react";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,68 +17,161 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LayoutDashboard, Package, LogOut, User } from "lucide-react";
+import {
+  LayoutDashboard,
+  LogOut,
+  Package,
+  User,
+} from "lucide-react";
 
 export default function UserProfileDropdown() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
 
-  if (!session?.user) {
+  // Loading state
+  if (status === "loading") {
     return (
-      <Button asChild variant="outline" size="sm">
-        <Link href="/login">Sign In</Link>
-      </Button>
+      <div className="h-9 w-9 animate-pulse rounded-full bg-slate-200" />
     );
   }
 
-  const user = session.user as any;
-  const role = user?.role || "customer";
+  // Guest user
+  if (!session?.user) {
+    return (
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/login">Login</Link>
+        </Button>
+
+        <Button size="sm" asChild>
+          <Link href="/register">Register</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const user = session.user;
+  const role = user.role;
+
+  const isAdmin = role === "admin";
+
+  const dashboardHref = isAdmin ? "/admin" : "/user";
+  const ordersHref = isAdmin ? "/admin/orders" : "/user/orders";
+
+  const fallbackName =
+    user.name?.charAt(0).toUpperCase() ||
+    user.email?.charAt(0).toUpperCase() ||
+    "U";
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0 border">
+        <Button
+          variant="ghost"
+          className="relative h-10 w-10 rounded-full p-0"
+        >
           <Avatar className="h-9 w-9">
-            <AvatarImage src={user.image || ""} alt={user.name || "User"} />
-            <AvatarFallback className="font-bold bg-black text-white">
-              {user?.name?.[0]?.toUpperCase() || <User className="h-4 w-4" />}
-            </AvatarFallback>
+            <AvatarImage
+              src={user.image || ""}
+              alt={user.name || "User"}
+            />
+
+            <AvatarFallback>{fallbackName}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent className="w-56" align="end" forceMount>
+      <DropdownMenuContent
+        className="w-64"
+        align="end"
+        forceMount
+      >
         <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-semibold leading-none">{user?.name}</p>
-            <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
-            <div className="pt-1">
-              <Badge variant={role === "admin" ? "default" : "secondary"} className="text-[10px] uppercase">
-                {role}
-              </Badge>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-10 w-10">
+                <AvatarImage
+                  src={user.image || ""}
+                  alt={user.name || "User"}
+                />
+
+                <AvatarFallback>
+                  {fallbackName}
+                </AvatarFallback>
+              </Avatar>
+
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">
+                  {user.name || "User"}
+                </p>
+
+                <p className="truncate text-xs text-muted-foreground">
+                  {user.email}
+                </p>
+              </div>
             </div>
+
+            <Badge
+              variant={isAdmin ? "default" : "secondary"}
+              className="w-fit text-[10px] uppercase"
+            >
+              {role}
+            </Badge>
           </div>
         </DropdownMenuLabel>
+
         <DropdownMenuSeparator />
 
+        {/* Dashboard */}
         <DropdownMenuItem asChild>
-          <Link href={role === "admin" ? "/admin" : "/user"} className="cursor-pointer flex items-center">
+          <Link
+            href={dashboardHref}
+            className="flex cursor-pointer items-center"
+          >
             <LayoutDashboard className="mr-2 h-4 w-4" />
-            <span>{role === "admin" ? "Admin Dashboard" : "My Dashboard"}</span>
+
+            <span>
+              {isAdmin ? "Admin Dashboard" : "My Dashboard"}
+            </span>
           </Link>
         </DropdownMenuItem>
 
+        {/* Orders */}
         <DropdownMenuItem asChild>
-          <Link href={role === "admin" ? "/admin/orders" : "/user/orders"} className="cursor-pointer flex items-center">
+          <Link
+            href={ordersHref}
+            className="flex cursor-pointer items-center"
+          >
             <Package className="mr-2 h-4 w-4" />
-            <span>{role === "admin" ? "All Orders" : "My Orders"}</span>
+
+            <span>
+              {isAdmin ? "All Orders" : "My Orders"}
+            </span>
           </Link>
         </DropdownMenuItem>
+
+        {/* Profile */}
+        {!isAdmin && (
+          <DropdownMenuItem asChild>
+            <Link
+              href="/user/profile"
+              className="flex cursor-pointer items-center"
+            >
+              <User className="mr-2 h-4 w-4" />
+              <span>My Profile</span>
+            </Link>
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSeparator />
 
+        {/* Logout */}
         <DropdownMenuItem
-          onClick={() => signOut({ callbackUrl: "/login" })}
-          className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+          onClick={() =>
+            signOut({
+              callbackUrl: "/",
+            })
+          }
+          className="cursor-pointer text-red-600 focus:bg-red-50 focus:text-red-600"
         >
           <LogOut className="mr-2 h-4 w-4" />
           <span>Sign Out</span>
