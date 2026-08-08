@@ -26,16 +26,18 @@ const ProductSchema: Schema<IProduct> = new Schema(
       required: [true, "Please specify stock"],
       default: 0,
     },
-    images: {
-      type: [String],
-      required: [true, "Please provide at least one image URL"],
-    },
+    images: [
+      {
+        url: String,
+        publicId: String,
+      },
+    ],
     ratings: {
       type: Number,
       default: 0,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const Product: Model<IProduct> =
