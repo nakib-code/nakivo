@@ -3,35 +3,69 @@
 import Link from "next/link";
 import { CheckCircle2, ShoppingBag } from "lucide-react";
 
-export default function PaymentSuccessPage() {
+import { Button } from "@/components/ui/button";
+
+interface SuccessPageProps {
+  searchParams: {
+    session_id?: string;
+    order_id?: string;
+  };
+}
+
+export default function SuccessPage({
+  searchParams,
+}: SuccessPageProps) {
+  const orderId = searchParams.order_id;
+
   return (
-    <div className="min-h-[70vh] flex items-center justify-center px-4">
-      <div className="max-w-md w-full p-8 bg-white border border-slate-200 rounded-3xl text-center space-y-6 shadow-sm">
-        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600">
-          <CheckCircle2 className="w-12 h-12" />
+    <div className="flex min-h-[70vh] items-center justify-center px-4">
+      <div className="w-full max-w-lg rounded-2xl border bg-white p-8 text-center shadow-sm">
+        {/* Success Icon */}
+
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+          <CheckCircle2 className="h-9 w-9 text-green-600" />
         </div>
 
-        <div className="space-y-2">
-          <h1 className="text-2xl font-black text-slate-900">Payment Successful!</h1>
-          <p className="text-slate-500 text-sm leading-relaxed">
-            Thank you for your order. Your payment has been verified and your shipment is being processed.
-          </p>
-        </div>
+        {/* Heading */}
 
-        <div className="pt-4 space-y-3">
-          <Link
-            href="/user/orders"
-            className="w-full inline-flex items-center justify-center bg-black text-white px-6 py-3 rounded-xl text-sm font-semibold hover:bg-slate-800 transition"
-          >
-            <ShoppingBag className="mr-2 h-4 w-4" /> View Order Status
-          </Link>
+        <h1 className="mt-6 text-2xl font-bold text-slate-900">
+          Payment Successful!
+        </h1>
 
-          <Link
-            href="/"
-            className="block text-xs font-semibold text-slate-500 hover:text-black transition"
-          >
-            Return to Home Page
-          </Link>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Thank you for your order. Your payment has been
+          successfully processed.
+        </p>
+
+        {/* Order ID */}
+
+        {orderId && (
+          <div className="mt-6 rounded-xl bg-slate-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Order ID
+            </p>
+
+            <p className="mt-1 break-all text-sm font-semibold text-slate-900">
+              {orderId}
+            </p>
+          </div>
+        )}
+
+        {/* Actions */}
+
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <Button asChild>
+            <Link href="/user/orders">
+              <ShoppingBag className="mr-2 h-4 w-4" />
+              View My Orders
+            </Link>
+          </Button>
+
+          <Button variant="outline" asChild>
+            <Link href="/products">
+              Continue Shopping
+            </Link>
+          </Button>
         </div>
       </div>
     </div>

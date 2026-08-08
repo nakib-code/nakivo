@@ -1,11 +1,53 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+
+// ==================================================
+// Types
+// ==================================================
+
+type PaymentMethod = "COD" | "STRIPE";
+
+interface CreateOrderItem {
+  product: string;
+  quantity: number;
+}
+
+interface ShippingAddress {
+  address: string;
+  city: string;
+  phone: string;
+}
+
+export interface CreateOrderPayload {
+  items: CreateOrderItem[];
+  shippingAddress: ShippingAddress;
+  paymentMethod: PaymentMethod;
+}
+
+interface UpdateOrderStatusPayload {
+  id: string;
+  status:
+    | "Pending"
+    | "Processing"
+    | "Delivered"
+    | "Cancelled";
+}
+
+// ==================================================
+// Create Order
+// ==================================================
 
 export function useCreateOrder() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (orderPayload: any) => {
-      const res = await fetch("/api/orders", {
+    mutationFn: async (
+      orderPayload: CreateOrderPayload
+    ) => {
+      const response = await fetch("/api/orders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -13,58 +55,90 @@ export function useCreateOrder() {
         body: JSON.stringify(orderPayload),
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Failed to place order");
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Failed to place order"
+        );
       }
 
-      return res.json();
+      return result;
     },
+
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({
+        queryKey: ["orders"],
+      });
     },
   });
 }
 
+// ==================================================
+// Get Orders
+// ==================================================
 
-// Fetch user/admin orders
 export function useOrders() {
   return useQuery({
     queryKey: ["orders"],
+
     queryFn: async () => {
-      const res = await fetch("/api/orders");
-      if (!res.ok) {
-        throw new Error("Failed to fetch orders");
+      const response = await fetch("/api/orders", {
+        cache: "no-store",
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Failed to fetch orders"
+        );
       }
-      const data = await res.json();
-      return data.data;
+
+      return result.data;
     },
   });
 }
 
+// ==================================================
+// Update Order Status - Admin
+// ==================================================
 
-// Update Order Status (Admin)
 export function useUpdateOrderStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const res = await fetch(`/api/orders/${id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status }),
-      });
+    mutationFn: async ({
+      id,
+      status,
+    }: UpdateOrderStatusPayload) => {
+      const response = await fetch(
+        `/api/orders/${id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status }),
+        }
+      );
 
-      if (!res.ok) {
-        throw new Error("Failed to update status");
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message ||
+            "Failed to update order status"
+        );
       }
 
-      return res.json();
+      return result;
     },
+
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({
+        queryKey: ["orders"],
+      });
     },
   });
 }

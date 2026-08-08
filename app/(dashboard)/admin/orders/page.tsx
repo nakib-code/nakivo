@@ -1,96 +1,401 @@
 "use client";
 
-import { useOrders, useUpdateOrderStatus } from "@/hooks/useOrders";
-import toast from "react-hot-toast";
+import {
+  CalendarDays,
+  Mail,
+  Package,
+  Phone,
+  User,
+} from "lucide-react";
+import { toast } from "sonner";
 
-const statusOptions = ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
+import {
+  useOrders,
+  useUpdateOrderStatus,
+} from "@/hooks/useOrders";
+
+const statuses = [
+  "Pending",
+  "Processing",
+  "Delivered",
+  "Cancelled",
+] as const;
 
 export default function AdminOrdersPage() {
-  const { data: orders, isLoading } = useOrders();
-  const updateStatusMutation = useUpdateOrderStatus();
+  const {
+    data: orders = [],
+    isLoading,
+    isError,
+  } = useOrders();
 
-  const handleStatusChange = (orderId: string, newStatus: string) => {
+  const updateStatusMutation =
+    useUpdateOrderStatus();
+
+  // =========================
+  // Update Status
+  // =========================
+
+  const handleStatusChange = (
+    orderId: string,
+    status: string
+  ) => {
     updateStatusMutation.mutate(
-      { id: orderId, status: newStatus },
+      {
+        id: orderId,
+        status,
+      },
       {
         onSuccess: () => {
-          toast.success(`Order status updated to ${newStatus}`);
+          toast.success(
+            "Order status updated successfully"
+          );
         },
-        onError: () => {
-          toast.error("Failed to update order status");
+        onError: (error: any) => {
+          toast.error(
+            error?.message ||
+              "Failed to update order status"
+          );
         },
       }
     );
   };
 
+  // =========================
+  // Loading
+  // =========================
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <div className="h-8 w-44 animate-pulse rounded bg-muted" />
+          <div className="mt-2 h-4 w-72 animate-pulse rounded bg-muted" />
+        </div>
+
+        <div className="space-y-4">
+          {[1, 2, 3].map((item) => (
+            <div
+              key={item}
+              className="h-64 animate-pulse rounded-2xl border bg-muted/40"
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // =========================
+  // Error
+  // =========================
+
+  if (isError) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
+        <p className="font-semibold text-red-600">
+          Failed to load orders.
+        </p>
+
+        <p className="mt-1 text-sm text-red-500">
+          Please try again later.
+        </p>
+      </div>
+    );
+  }
+
+  // =========================
+  // Empty
+  // =========================
+
+  if (orders.length === 0) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+            <Package className="h-8 w-8 text-muted-foreground" />
+          </div>
+
+          <h1 className="mt-5 text-2xl font-bold">
+            No Orders Found
+          </h1>
+
+          <p className="mt-2 text-sm text-muted-foreground">
+            There are currently no customer orders.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* =========================
+          Header
+      ========================= */}
+
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">All Customer Orders</h1>
-        <p className="text-sm text-slate-500">Manage and update order progress.</p>
+        <h1 className="text-2xl font-bold tracking-tight">
+          Orders
+        </h1>
+
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage and track all customer orders.
+        </p>
       </div>
 
-      {isLoading ? (
-        <p className="text-sm text-slate-500">Loading orders...</p>
-      ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
-          <table className="w-full text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-700 border-b">
-              <tr>
-                <th className="py-3 px-4">Order ID</th>
-                <th className="py-3 px-4">Phone</th>
-                <th className="py-3 px-4">City</th>
-                <th className="py-3 px-4">Total</th>
-                <th className="py-3 px-4">Status Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {orders && orders.length > 0 ? (
-                orders.map((order: any) => (
-                  <tr key={order._id} className="hover:bg-slate-50/80 transition">
-                    <td className="py-3 px-4 font-mono text-xs text-slate-800 font-medium">
-                      {order._id}
-                    </td>
-                    <td className="py-3 px-4">{order.phone || "N/A"}</td>
-                    <td className="py-3 px-4">{order.shippingAddress?.city || "N/A"}</td>
-                    <td className="py-3 px-4 font-bold text-slate-900">
-                      ${order.totalAmount}
-                    </td>
-                    <td className="py-3 px-4">
-                      <select
-                        value={order.status || "Pending"}
-                        onChange={(e) => handleStatusChange(order._id, e.target.value)}
-                        disabled={updateStatusMutation.isPending}
-                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border focus:outline-none cursor-pointer ${
-                          order.status === "Delivered"
-                            ? "bg-green-50 text-green-700 border-green-200"
-                            : order.status === "Shipped"
-                            ? "bg-blue-50 text-blue-700 border-blue-200"
-                            : order.status === "Cancelled"
-                            ? "bg-red-50 text-red-700 border-red-200"
-                            : "bg-amber-50 text-amber-800 border-amber-200"
-                        }`}
-                      >
-                        {statusOptions.map((st) => (
-                          <option key={st} value={st} className="bg-white text-slate-800">
-                            {st}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className="text-center py-8 text-slate-400">
-                    No orders placed yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* =========================
+          Order List
+      ========================= */}
+
+      <div className="space-y-5">
+        {orders.map((order: any) => {
+          const customer = order.user;
+
+          return (
+            <div
+              key={order._id}
+              className="overflow-hidden rounded-2xl border bg-white shadow-sm"
+            >
+              {/* =========================
+                  Order Header
+              ========================= */}
+
+              <div className="flex flex-col gap-4 border-b bg-slate-50 p-5 lg:flex-row lg:items-center lg:justify-between">
+                {/* Order Info */}
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-muted-foreground" />
+
+                    <p className="font-semibold">
+                      Order #{order._id.slice(-8)}
+                    </p>
+                  </div>
+
+                  <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                    <CalendarDays className="h-3.5 w-3.5" />
+
+                    {new Date(
+                      order.createdAt
+                    ).toLocaleString()}
+                  </div>
+                </div>
+
+                {/* Status */}
+
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Payment Status */}
+
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                      order.isPaid
+                        ? "bg-green-100 text-green-700"
+                        : "bg-yellow-100 text-yellow-700"
+                    }`}
+                  >
+                    {order.isPaid
+                      ? "Paid"
+                      : "Unpaid"}
+                  </span>
+
+                  {/* Status Select */}
+
+                  <select
+                    value={order.status}
+                    disabled={
+                      updateStatusMutation.isPending
+                    }
+                    onChange={(event) =>
+                      handleStatusChange(
+                        order._id,
+                        event.target.value
+                      )
+                    }
+                    className="rounded-lg border bg-white px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-black"
+                  >
+                    {statuses.map(
+                      (status) => (
+                        <option
+                          key={status}
+                          value={status}
+                        >
+                          {status}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              {/* =========================
+                  Customer Information
+              ========================= */}
+
+              <div className="grid gap-6 border-b p-5 md:grid-cols-2">
+                {/* Customer */}
+
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Customer
+                  </p>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <User className="h-4 w-4 text-muted-foreground" />
+
+                      <span className="font-medium">
+                        {customer?.name ||
+                          "Unknown Customer"}
+                      </span>
+                    </div>
+
+                    {customer?.email && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Mail className="h-4 w-4" />
+
+                        {customer.email}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Shipping */}
+
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Shipping Address
+                  </p>
+
+                  <div className="space-y-1 text-sm">
+                    <p>
+                      {order.shippingAddress
+                        ?.address ||
+                        "No address"}
+                    </p>
+
+                    <p className="text-muted-foreground">
+                      {order.shippingAddress
+                        ?.city || ""}
+                    </p>
+
+                    {order.shippingAddress
+                      ?.phone && (
+                      <div className="mt-2 flex items-center gap-2 text-muted-foreground">
+                        <Phone className="h-4 w-4" />
+
+                        {
+                          order.shippingAddress
+                            .phone
+                        }
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* =========================
+                  Products
+              ========================= */}
+
+              <div className="space-y-4 p-5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Order Items
+                </p>
+
+                <div className="space-y-4">
+                  {order.orderItems?.map(
+                    (item: any) => {
+                      const image =
+                        item.image ||
+                        item.product?.images?.[0]
+                          ?.url ||
+                        "";
+
+                      return (
+                        <div
+                          key={`${order._id}-${item.product?._id || item.product}`}
+                          className="flex items-center gap-4"
+                        >
+                          {/* Image */}
+
+                          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100">
+                            {image ? (
+                              <img
+                                src={image}
+                                alt={
+                                  item.title
+                                }
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center">
+                                <Package className="h-6 w-6 text-muted-foreground" />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Product */}
+
+                          <div className="min-w-0 flex-1">
+                            <p className="line-clamp-1 font-semibold">
+                              {item.title}
+                            </p>
+
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              ${item.price.toFixed(
+                                2
+                              )} ×{" "}
+                              {item.quantity}
+                            </p>
+                          </div>
+
+                          {/* Item Total */}
+
+                          <p className="text-sm font-bold">
+                            $
+                            {(
+                              item.price *
+                              item.quantity
+                            ).toFixed(2)}
+                          </p>
+                        </div>
+                      );
+                    }
+                  )}
+                </div>
+              </div>
+
+              {/* =========================
+                  Footer
+              ========================= */}
+
+              <div className="flex flex-col gap-3 border-t bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Payment Method
+                  </p>
+
+                  <p className="font-semibold">
+                    {order.paymentMethod}
+                  </p>
+                </div>
+
+                <div className="text-left sm:text-right">
+                  <p className="text-xs text-muted-foreground">
+                    Total Order Amount
+                  </p>
+
+                  <p className="text-xl font-bold">
+                    $
+                    {Number(
+                      order.totalPrice
+                    ).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -1,120 +1,328 @@
 "use client";
 
-import { useCartStore } from "@/store/useCartStore";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  Minus,
+  Plus,
+  ShoppingBag,
+  Trash2,
+} from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { useCartStore } from "@/store/useCartStore";
 
 export default function CartPage() {
-  const { cart, removeFromCart, updateQuantity, getTotalPrice, clearCart } = useCartStore();
+  const {
+    cart,
+    removeFromCart,
+    updateQuantity,
+    getTotalPrice,
+    clearCart,
+  } = useCartStore();
+
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  if (!mounted) return null;
+  if (!mounted) {
+    return (
+      <main className="min-h-screen bg-slate-50" />
+    );
+  }
+
+  const totalPrice = getTotalPrice();
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <h1 className="text-3xl font-extrabold text-gray-900 mb-8">Shopping Cart</h1>
+    <main className="min-h-screen bg-slate-50">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
 
-      {cart.length === 0 ? (
-        <div className="text-center py-16 bg-white border border-gray-200 rounded-xl space-y-4">
-          <p className="text-gray-500 text-lg">Your cart is currently empty.</p>
+        {/* =========================
+            Header
+        ========================== */}
+
+        <div className="mb-8">
           <Link
-            href="/"
-            className="inline-block bg-black text-white px-6 py-2.5 rounded-md text-sm font-semibold hover:bg-gray-800 transition"
+            href="/products"
+            className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition hover:text-slate-950"
           >
+            <ArrowLeft className="h-4 w-4" />
             Continue Shopping
           </Link>
+
+          <div className="flex items-center gap-3">
+            <ShoppingBag className="h-7 w-7" />
+
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                Shopping Cart
+              </h1>
+
+              <p className="mt-1 text-sm text-slate-500">
+                {cart.length}{" "}
+                {cart.length === 1
+                  ? "item"
+                  : "items"}{" "}
+                in your cart
+              </p>
+            </div>
+          </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* Cart Items List */}
-          <div className="lg:col-span-2 space-y-4">
-            {cart.map((item) => (
-              <div
-                key={item._id}
-                className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl"
-              >
-                <div className="flex items-center space-x-4">
-                  <img
-                    src={item.image || "/placeholder.png"}
-                    alt={item.title}
-                    className="w-16 h-16 object-cover rounded-md border"
-                  />
-                  <div>
-                    <h3 className="text-base font-semibold text-gray-800">{item.title}</h3>
-                    <p className="text-sm font-bold text-gray-900">${item.price}</p>
-                  </div>
-                </div>
 
-                {/* Quantity Controls */}
-                <div className="flex items-center space-x-3">
-                  <div className="flex items-center border rounded-md">
-                    <button
-                      onClick={() => updateQuantity(item._id, item.quantity - 1)}
-                      className="px-2.5 py-1 text-gray-600 hover:bg-gray-100"
-                    >
-                      -
-                    </button>
-                    <span className="px-3 text-sm font-semibold">{item.quantity}</span>
-                    <button
-                      onClick={() => updateQuantity(item._id, item.quantity + 1)}
-                      className="px-2.5 py-1 text-gray-600 hover:bg-gray-100"
-                    >
-                      +
-                    </button>
-                  </div>
+        {/* =========================
+            Empty Cart
+        ========================== */}
 
-                  <button
-                    onClick={() => removeFromCart(item._id)}
-                    className="text-red-500 hover:text-red-700 text-sm font-medium"
+        {cart.length === 0 ? (
+          <div className="rounded-2xl border bg-white px-6 py-20 text-center shadow-sm">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
+              <ShoppingBag className="h-7 w-7 text-slate-500" />
+            </div>
+
+            <h2 className="mt-5 text-xl font-bold">
+              Your cart is empty
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-500">
+              Looks like you haven't added anything
+              to your cart yet.
+            </p>
+
+            <Button
+              asChild
+              className="mt-6"
+            >
+              <Link href="/products">
+                Start Shopping
+              </Link>
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-8 lg:grid-cols-3">
+
+            {/* =========================
+                Cart Items
+            ========================== */}
+
+            <div className="space-y-4 lg:col-span-2">
+
+              {cart.map((item) => {
+                const image =
+                  item.image || "/placeholder.png";
+
+                return (
+                  <div
+                    key={item._id}
+                    className="rounded-2xl border bg-white p-4 shadow-sm"
                   >
-                    Remove
-                  </button>
-                </div>
+                    <div className="flex gap-4">
+
+                      {/* Image */}
+
+                      <Link
+                        href={`/products/${item._id}`}
+                        className="shrink-0"
+                      >
+                        <div className="h-24 w-24 overflow-hidden rounded-xl bg-slate-100">
+                          <img
+                            src={image}
+                            alt={item.title}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      </Link>
+
+                      {/* Information */}
+
+                      <div className="min-w-0 flex-1">
+
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <Link
+                              href={`/products/${item._id}`}
+                            >
+                              <h3 className="line-clamp-2 font-semibold text-slate-900 hover:underline">
+                                {item.title}
+                              </h3>
+                            </Link>
+
+                            <p className="mt-1 text-sm text-slate-500">
+                              ${item.price.toFixed(2)}
+                              {" "}per item
+                            </p>
+                          </div>
+
+                          {/* Remove */}
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removeFromCart(
+                                item._id
+                              )
+                            }
+                            className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                            aria-label={`Remove ${item.title}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+
+                        {/* Bottom */}
+
+                        <div className="mt-5 flex items-center justify-between">
+
+                          {/* Quantity */}
+
+                          <div className="flex items-center rounded-lg border">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateQuantity(
+                                  item._id,
+                                  item.quantity - 1
+                                )
+                              }
+                              disabled={
+                                item.quantity <= 1
+                              }
+                              className="flex h-9 w-9 items-center justify-center text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              <Minus className="h-4 w-4" />
+                            </button>
+
+                            <span className="w-10 text-center text-sm font-semibold">
+                              {item.quantity}
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateQuantity(
+                                  item._id,
+                                  item.quantity + 1
+                                )
+                              }
+                              disabled={
+                                item.quantity >=
+                                item.stock
+                              }
+                              className="flex h-9 w-9 items-center justify-center text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          </div>
+
+                          {/* Item Total */}
+
+                          <p className="font-bold text-slate-950">
+                            $
+                            {(
+                              item.price *
+                              item.quantity
+                            ).toFixed(2)}
+                          </p>
+                        </div>
+
+                        {/* Stock Warning */}
+
+                        {item.quantity >=
+                          item.stock && (
+                          <p className="mt-2 text-xs text-orange-600">
+                            Maximum available
+                            quantity reached.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Clear Cart */}
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={clearCart}
+                  className="text-sm font-medium text-slate-500 underline underline-offset-4 transition hover:text-red-600"
+                >
+                  Clear Cart
+                </button>
               </div>
-            ))}
+            </div>
 
-            <button
-              onClick={clearCart}
-              className="text-xs text-gray-500 hover:text-red-600 underline pt-2"
-            >
-              Clear Cart
-            </button>
+            {/* =========================
+                Order Summary
+            ========================== */}
+
+            <aside className="h-fit rounded-2xl border bg-white p-6 shadow-sm lg:sticky lg:top-6">
+
+              <h2 className="text-lg font-bold">
+                Order Summary
+              </h2>
+
+              <div className="my-5 border-t" />
+
+              <div className="space-y-4">
+
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">
+                    Subtotal
+                  </span>
+
+                  <span className="font-medium">
+                    ${totalPrice.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">
+                    Shipping
+                  </span>
+
+                  <span className="font-semibold text-green-600">
+                    Free
+                  </span>
+                </div>
+
+              </div>
+
+              <div className="my-5 border-t" />
+
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">
+                  Total
+                </span>
+
+                <span className="text-2xl font-bold">
+                  ${totalPrice.toFixed(2)}
+                </span>
+              </div>
+
+              <Button
+                asChild
+                size="lg"
+                className="mt-6 w-full"
+              >
+                <Link href="/checkout">
+                  Proceed to Checkout
+                </Link>
+              </Button>
+
+              <Link
+                href="/products"
+                className="mt-4 block text-center text-sm font-medium text-slate-500 hover:text-slate-950"
+              >
+                Continue Shopping
+              </Link>
+            </aside>
           </div>
-
-          {/* Order Summary */}
-          <div className="bg-white border border-gray-200 p-6 rounded-xl space-y-4 h-fit">
-            <h2 className="text-lg font-bold text-gray-900 border-b pb-3">Order Summary</h2>
-
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>Subtotal</span>
-              <span className="font-semibold text-gray-900">${getTotalPrice().toFixed(2)}</span>
-            </div>
-
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>Shipping</span>
-              <span className="text-green-600 font-semibold">Free</span>
-            </div>
-
-            <div className="border-t pt-3 flex justify-between text-base font-bold text-gray-900">
-              <span>Total</span>
-              <span>${getTotalPrice().toFixed(2)}</span>
-            </div>
-
-            <Link
-              href="/checkout"
-              className="block text-center w-full bg-black text-white py-3 rounded-md font-semibold text-sm hover:bg-gray-800 transition mt-4"
-            >
-              Proceed to Checkout
-            </Link>
-          </div>
-
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </main>
   );
 }
