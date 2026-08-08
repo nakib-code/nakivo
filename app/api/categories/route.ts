@@ -175,7 +175,6 @@ export async function POST(req: NextRequest) {
 
     const category = await createCategory({
       name,
-      slug,
       description,
       image: imageUrl,
     });

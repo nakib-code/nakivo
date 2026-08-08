@@ -21,6 +21,8 @@ const statuses = [
   "Cancelled",
 ] as const;
 
+type OrderStatus = (typeof statuses)[number];
+
 export default function AdminOrdersPage() {
   const {
     data: orders = [],
@@ -37,7 +39,7 @@ export default function AdminOrdersPage() {
 
   const handleStatusChange = (
     orderId: string,
-    status: string
+    status: OrderStatus
   ) => {
     updateStatusMutation.mutate(
       {
@@ -50,6 +52,7 @@ export default function AdminOrdersPage() {
             "Order status updated successfully"
           );
         },
+
         onError: (error: any) => {
           toast.error(
             error?.message ||
@@ -68,8 +71,13 @@ export default function AdminOrdersPage() {
     return (
       <div className="space-y-6">
         <div>
-          <div className="h-8 w-44 animate-pulse rounded bg-muted" />
-          <div className="mt-2 h-4 w-72 animate-pulse rounded bg-muted" />
+          <h1 className="text-2xl font-bold">
+            Orders
+          </h1>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            Loading customer orders...
+          </p>
         </div>
 
         <div className="space-y-4">
@@ -90,10 +98,10 @@ export default function AdminOrdersPage() {
 
   if (isError) {
     return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
-        <p className="font-semibold text-red-600">
-          Failed to load orders.
-        </p>
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
+        <h1 className="text-xl font-bold text-red-700">
+          Failed to load orders
+        </h1>
 
         <p className="mt-1 text-sm text-red-500">
           Please try again later.
@@ -108,11 +116,9 @@ export default function AdminOrdersPage() {
 
   if (orders.length === 0) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="flex min-h-[400px] items-center justify-center rounded-2xl border border-dashed">
         <div className="text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-            <Package className="h-8 w-8 text-muted-foreground" />
-          </div>
+          <Package className="mx-auto h-10 w-10 text-muted-foreground" />
 
           <h1 className="mt-5 text-2xl font-bold">
             No Orders Found
@@ -125,6 +131,10 @@ export default function AdminOrdersPage() {
       </div>
     );
   }
+
+  // =========================
+  // Orders
+  // =========================
 
   return (
     <div className="space-y-6">
@@ -204,24 +214,25 @@ export default function AdminOrdersPage() {
                     disabled={
                       updateStatusMutation.isPending
                     }
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value =
+                        event.target.value as OrderStatus;
+
                       handleStatusChange(
                         order._id,
-                        event.target.value
-                      )
-                    }
+                        value
+                      );
+                    }}
                     className="rounded-lg border bg-white px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-black"
                   >
-                    {statuses.map(
-                      (status) => (
-                        <option
-                          key={status}
-                          value={status}
-                        >
-                          {status}
-                        </option>
-                      )
-                    )}
+                    {statuses.map((status) => (
+                      <option
+                        key={status}
+                        value={status}
+                      >
+                        {status}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -341,10 +352,11 @@ export default function AdminOrdersPage() {
                             </p>
 
                             <p className="mt-1 text-xs text-muted-foreground">
-                              ${item.price.toFixed(
-                                2
-                              )} ×{" "}
-                              {item.quantity}
+                              $
+                              {Number(
+                                item.price
+                              ).toFixed(2)}{" "}
+                              × {item.quantity}
                             </p>
                           </div>
 
@@ -353,7 +365,9 @@ export default function AdminOrdersPage() {
                           <p className="text-sm font-bold">
                             $
                             {(
-                              item.price *
+                              Number(
+                                item.price
+                              ) *
                               item.quantity
                             ).toFixed(2)}
                           </p>
@@ -399,3 +413,4 @@ export default function AdminOrdersPage() {
     </div>
   );
 }
+
