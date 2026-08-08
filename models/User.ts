@@ -36,6 +36,11 @@ const UserSchema = new Schema<IUser>(
       default: "customer",
     },
 
+    status: {
+  type: String,
+  enum: ["active", "blocked"],
+  default: "active",
+},
     provider: {
       type: String,
       enum: ["credentials", "google"],

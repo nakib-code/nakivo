@@ -456,10 +456,10 @@ export default function AdminProductsPage() {
                               asChild
                             >
                               <Link
-                                href={`/admin/products/${product._id}/edit`}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Link>
+ href={`/admin/products/${product._id}/edit`}
+>
+ Edit
+</Link>
                             </Button>
 
                             {/* Delete */}

@@ -35,6 +35,7 @@ export const env = {
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: required(
     "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
   ),
+  STRIPE_WEBHOOK_SECRET: required("STRIPE_WEBHOOK_SECRET"),
 
   // =========================
   // Application URLs

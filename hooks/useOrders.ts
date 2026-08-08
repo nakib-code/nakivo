@@ -4,141 +4,101 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
-// ==================================================
-// Types
-// ==================================================
+import {
+  getAdminOrders,
+} from "@/service/order/order.api";
 
-type PaymentMethod = "COD" | "STRIPE";
 
-interface CreateOrderItem {
-  product: string;
-  quantity: number;
-}
+type OrderStatus =
+  | "Pending"
+  | "Processing"
+  | "Delivered"
+  | "Cancelled";
 
-interface ShippingAddress {
-  address: string;
-  city: string;
-  phone: string;
-}
-
-export interface CreateOrderPayload {
-  items: CreateOrderItem[];
-  shippingAddress: ShippingAddress;
-  paymentMethod: PaymentMethod;
-}
 
 interface UpdateOrderStatusPayload {
   id: string;
-  status:
-    | "Pending"
-    | "Processing"
-    | "Delivered"
-    | "Cancelled";
+  status: OrderStatus;
 }
 
-// ==================================================
-// Create Order
-// ==================================================
 
-export function useCreateOrder() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (
-      orderPayload: CreateOrderPayload
-    ) => {
-      const response = await fetch("/api/orders", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(orderPayload),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.message || "Failed to place order"
-        );
-      }
-
-      return result;
-    },
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["orders"],
-      });
-    },
-  });
-}
-
-// ==================================================
-// Get Orders
-// ==================================================
+// ========================================
+// Get Admin Orders
+// ========================================
 
 export function useOrders() {
   return useQuery({
-    queryKey: ["orders"],
+    queryKey: [
+      "orders",
+    ],
 
-    queryFn: async () => {
-      const response = await fetch("/api/orders", {
-        cache: "no-store",
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.message || "Failed to fetch orders"
-        );
-      }
-
-      return result.data;
-    },
+    queryFn: getAdminOrders,
   });
 }
 
-// ==================================================
-// Update Order Status - Admin
-// ==================================================
+
+// ========================================
+// Update Order Status
+// ========================================
 
 export function useUpdateOrderStatus() {
-  const queryClient = useQueryClient();
+
+  const queryClient =
+    useQueryClient();
+
 
   return useMutation({
+
     mutationFn: async ({
       id,
       status,
     }: UpdateOrderStatusPayload) => {
+
+
       const response = await fetch(
-        `/api/orders/${id}`,
+        `/api/admin/orders/${id}`,
         {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
+
+          headers:{
+            "Content-Type":
+              "application/json",
           },
-          body: JSON.stringify({ status }),
+
+          body: JSON.stringify({
+            status,
+          }),
         }
       );
 
-      const result = await response.json();
 
-      if (!response.ok) {
+      const result =
+        await response.json();
+
+
+      if(!response.ok){
         throw new Error(
           result.message ||
-            "Failed to update order status"
+          "Failed to update status"
         );
       }
 
+
       return result;
+
     },
 
-    onSuccess: () => {
+
+    onSuccess:()=>{
+
       queryClient.invalidateQueries({
-        queryKey: ["orders"],
+        queryKey:[
+          "orders",
+        ],
       });
+
     },
+
+
   });
 }

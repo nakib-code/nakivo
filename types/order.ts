@@ -1,45 +1,54 @@
-import { Types } from "mongoose";
+export interface AdminOrderItem {
+  _id?: string;
 
-export interface IOrderItem {
-  product: Types.ObjectId;
+  product: string;
+
   title: string;
+
   price: number;
+
   quantity: number;
+
   image: string;
 }
 
-export interface IShippingAddress {
-  fullName: string;
-  phone: string;
+
+export interface ShippingAddress {
   address: string;
   city: string;
-  postalCode?: string;
+  phone: string;
 }
 
-export type PaymentStatus =
-  | "UNPAID"
-  | "PAID"
-  | "FAILED"
-  | "REFUNDED";
 
 export type OrderStatus =
-  | "PENDING"
-  | "CONFIRMED"
-  | "PROCESSING"
-  | "SHIPPED"
-  | "DELIVERED"
-  | "CANCELLED";
+  | "Pending"
+  | "Processing"
+  | "Delivered"
+  | "Cancelled";
 
-export interface IOrder {
-  _id?: string | Types.ObjectId;
-  user: Types.ObjectId;
-  items: IOrderItem[];
-  totalAmount: number;
-  shippingAddress: IShippingAddress;
-  paymentStatus: PaymentStatus;
-  orderStatus: OrderStatus;
-  paymentMethod?: string;
-  transactionId?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+
+export interface AdminOrder {
+  _id: string;
+
+  user?: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+
+  orderItems: AdminOrderItem[];
+
+  shippingAddress: ShippingAddress;
+
+  paymentMethod: "COD" | "STRIPE";
+
+  totalPrice: number;
+
+  isPaid: boolean;
+
+  status: OrderStatus;
+
+  createdAt: string;
+
+  updatedAt: string;
 }

@@ -5,6 +5,7 @@ export interface IUser extends Document {
   _id: Types.ObjectId;
 
   name: string;
+
   email: string;
 
   password?: string;
@@ -13,9 +14,12 @@ export interface IUser extends Document {
 
   role: "customer" | "admin";
 
+  status: "active" | "blocked";
+
   provider: "credentials" | "google";
 
   createdAt: Date;
+
   updatedAt: Date;
 }
 
