@@ -1,21 +1,18 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-
-// ========================================
-// CART ITEM
-// ========================================
+import type { IProduct } from "@/types";
 
 export interface CartItem {
   _id: string;
   title: string;
 
-  // Current checkout price
+  // Price used for checkout
   price: number;
 
   // Original product price
   regularPrice: number;
 
-  // Whether price was taken from active flash sale
+  // Whether this cart item was added during an active flash sale
   isFlashSale: boolean;
 
   image: string;
@@ -23,60 +20,48 @@ export interface CartItem {
   quantity: number;
 }
 
-// ========================================
-// PRODUCT TYPE
-// ========================================
-
-export interface CartProduct {
-  _id: string;
-  title: string;
-  price: number;
-  stock: number;
-
-  images?: {
-    url: string;
-    publicId?: string;
-  }[];
-
-  image?: string;
-
-  isFlashSale?: boolean;
-  flashSalePrice?: number;
-  flashSaleStart?: string;
-  flashSaleEnd?: string;
-}
-
-// ========================================
-// CART STATE
-// ========================================
-
 interface CartState {
   cart: CartItem[];
 
-  addToCart: (product: CartProduct) => void;
-
+  addToCart: (product: IProduct) => void;
   removeFromCart: (id: string) => void;
-
   updateQuantity: (
     id: string,
     quantity: number
   ) => void;
-
   clearCart: () => void;
 
   getTotalPrice: () => number;
-
   getTotalItems: () => number;
+}
 
-  refreshFlashSalePrices: () => void;
+// ========================================
+// DATE NORMALIZER
+// ========================================
+
+function getDateValue(
+  value: string | Date | undefined
+): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const time =
+    value instanceof Date
+      ? value.getTime()
+      : new Date(value).getTime();
+
+  return Number.isFinite(time)
+    ? time
+    : null;
 }
 
 // ========================================
 // CHECK ACTIVE FLASH SALE
 // ========================================
 
-export function isFlashSaleCurrentlyActive(
-  product: CartProduct
+function isFlashSaleActive(
+  product: IProduct
 ): boolean {
   if (
     !product.isFlashSale ||
@@ -89,13 +74,13 @@ export function isFlashSaleCurrentlyActive(
 
   const now = Date.now();
 
-  const start = new Date(
+  const start = getDateValue(
     product.flashSaleStart
-  ).getTime();
+  );
 
-  const end = new Date(
+  const end = getDateValue(
     product.flashSaleEnd
-  ).getTime();
+  );
 
   const flashPrice = Number(
     product.flashSalePrice
@@ -105,11 +90,16 @@ export function isFlashSaleCurrentlyActive(
     product.price
   );
 
+  if (
+    start === null ||
+    end === null ||
+    !Number.isFinite(flashPrice) ||
+    !Number.isFinite(regularPrice)
+  ) {
+    return false;
+  }
+
   return (
-    Number.isFinite(start) &&
-    Number.isFinite(end) &&
-    Number.isFinite(flashPrice) &&
-    Number.isFinite(regularPrice) &&
     now >= start &&
     now <= end &&
     flashPrice > 0 &&
@@ -118,23 +108,16 @@ export function isFlashSaleCurrentlyActive(
 }
 
 // ========================================
-// GET ACTIVE PRODUCT PRICE
+// GET ACTIVE PRICE
 // ========================================
 
 function getProductPrice(
-  product: CartProduct
+  product: IProduct
 ) {
-  const regularPrice = Number(
-    product.price
-  );
-
   const activeFlashSale =
-    isFlashSaleCurrentlyActive(product);
+    isFlashSaleActive(product);
 
-  if (
-    activeFlashSale &&
-    product.flashSalePrice !== undefined
-  ) {
+  if (activeFlashSale) {
     return {
       price: Number(
         product.flashSalePrice
@@ -144,7 +127,7 @@ function getProductPrice(
   }
 
   return {
-    price: regularPrice,
+    price: Number(product.price),
     isFlashSale: false,
   };
 }
@@ -164,6 +147,10 @@ export const useCartStore =
         // ========================================
 
         addToCart: (product) => {
+          if (!product._id) {
+            return;
+          }
+
           const currentCart =
             get().cart;
 
@@ -177,7 +164,6 @@ export const useCartStore =
             product.stock ?? 0
           );
 
-          // No stock
           if (stock <= 0) {
             return;
           }
@@ -193,7 +179,6 @@ export const useCartStore =
           // ========================================
 
           if (existingItem) {
-            // Prevent quantity > stock
             if (
               existingItem.quantity >=
               stock
@@ -204,32 +189,16 @@ export const useCartStore =
             set({
               cart: currentCart.map(
                 (item) =>
-                  item._id ===
-                  product._id
+                  item._id === product._id
                     ? {
                         ...item,
-
-                        title:
-                          product.title,
-
                         price,
-
                         regularPrice:
                           Number(
                             product.price
                           ),
-
                         isFlashSale,
-
-                        image:
-                          product
-                            .images?.[0]
-                            ?.url ||
-                          product.image ||
-                          item.image,
-
                         stock,
-
                         quantity:
                           item.quantity + 1,
                       }
@@ -244,38 +213,36 @@ export const useCartStore =
           // NEW ITEM
           // ========================================
 
-          const newItem: CartItem = {
-            _id: product._id,
-
-            title: product.title,
-
-            price,
-
-            regularPrice:
-              Number(product.price),
-
-            isFlashSale,
-
-            image:
-              product.images?.[0]?.url ||
-              product.image ||
-              "",
-
-            stock,
-
-            quantity: 1,
-          };
-
           set({
             cart: [
               ...currentCart,
-              newItem,
+              {
+                _id: product._id,
+
+                title: product.title,
+
+                price,
+
+                regularPrice:
+                  Number(product.price),
+
+                isFlashSale,
+
+                image:
+                  product.images?.[0]
+                    ?.url ||
+                  "",
+
+                stock,
+
+                quantity: 1,
+              },
             ],
           });
         },
 
         // ========================================
-        // REMOVE FROM CART
+        // REMOVE
         // ========================================
 
         removeFromCart: (id) => {
@@ -305,16 +272,12 @@ export const useCartStore =
             return;
           }
 
-          // Remove item
           if (quantity <= 0) {
             get().removeFromCart(id);
             return;
           }
 
-          // Prevent exceeding stock
-          if (
-            quantity > item.stock
-          ) {
+          if (quantity > item.stock) {
             return;
           }
 
@@ -332,38 +295,7 @@ export const useCartStore =
         },
 
         // ========================================
-        // REFRESH FLASH SALE PRICES
-        // ========================================
-
-        refreshFlashSalePrices: () => {
-          set({
-            cart: get().cart.map(
-              (item) => {
-                // If item was flash sale
-                // and sale time has ended,
-                // return to regular price.
-                if (
-                  item.isFlashSale
-                ) {
-                  return {
-                    ...item,
-
-                    price:
-                      item.regularPrice,
-
-                    isFlashSale:
-                      false,
-                  };
-                }
-
-                return item;
-              }
-            ),
-          });
-        },
-
-        // ========================================
-        // CLEAR CART
+        // CLEAR
         // ========================================
 
         clearCart: () => {
@@ -398,7 +330,6 @@ export const useCartStore =
           );
         },
       }),
-
       {
         name: "cart-storage",
       }

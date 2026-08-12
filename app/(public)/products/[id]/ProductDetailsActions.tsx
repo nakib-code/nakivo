@@ -12,25 +12,11 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/store/useCartStore";
+import { IProduct } from "@/types";
 
-interface ProductImage {
-  url: string;
-  publicId: string;
-}
-
-interface Product {
-  _id: string;
-  title: string;
-  description: string;
-  price: number;
-  category: string;
-  stock: number;
-  ratings: number;
-  images: ProductImage[];
-}
 
 interface ProductDetailsActionsProps {
-  product: Product;
+  product: IProduct;
 }
 
 export default function ProductDetailsActions({

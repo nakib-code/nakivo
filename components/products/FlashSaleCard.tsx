@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import Link from "next/link";
-
 import {
   Clock,
   Eye,
@@ -10,31 +9,34 @@ import {
   ShoppingCart,
   Zap,
 } from "lucide-react";
-
-import {
-  useEffect,
-  useState,
-} from "react";
-
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import {
-  useCartStore,
-} from "@/store/useCartStore";
-
+import { useCartStore } from "@/store/useCartStore";
 import type { IProduct } from "@/types";
 
-// ========================================
-// PROPS
-// ========================================
+// ==================================================
+// TYPES
+// ==================================================
 
 interface FlashSaleCardProps {
   product: IProduct;
 }
 
-// ========================================
-// CHECK ACTIVE FLASH SALE
-// ========================================
+interface FlashCountdownProps {
+  endDate: string | Date;
+}
+
+interface TimeLeft {
+  total: number;
+  hours: string;
+  minutes: string;
+  seconds: string;
+}
+
+// ==================================================
+// HELPERS
+// ==================================================
 
 function isFlashSaleCurrentlyActive(
   product: IProduct
@@ -78,9 +80,67 @@ function isFlashSaleCurrentlyActive(
   );
 }
 
-// ========================================
+function getTimeLeft(
+  endDate: string | Date
+): TimeLeft {
+  const endTime =
+    new Date(endDate).getTime();
+
+  if (!Number.isFinite(endTime)) {
+    return {
+      total: 0,
+      hours: "00",
+      minutes: "00",
+      seconds: "00",
+    };
+  }
+
+  const difference =
+    endTime - Date.now();
+
+  if (difference <= 0) {
+    return {
+      total: 0,
+      hours: "00",
+      minutes: "00",
+      seconds: "00",
+    };
+  }
+
+  const totalSeconds = Math.floor(
+    difference / 1000
+  );
+
+  const hours = Math.floor(
+    totalSeconds / 3600
+  );
+
+  const minutes = Math.floor(
+    (totalSeconds % 3600) / 60
+  );
+
+  const seconds = totalSeconds % 60;
+
+  return {
+    total: difference,
+    hours: String(hours).padStart(
+      2,
+      "0"
+    ),
+    minutes: String(minutes).padStart(
+      2,
+      "0"
+    ),
+    seconds: String(seconds).padStart(
+      2,
+      "0"
+    ),
+  };
+}
+
+// ==================================================
 // FLASH SALE CARD
-// ========================================
+// ==================================================
 
 export default function FlashSaleCard({
   product,
@@ -89,71 +149,65 @@ export default function FlashSaleCard({
     (state) => state.addToCart
   );
 
-  // ========================================
+  // ==================================================
   // SALE ACTIVE STATE
-  // ========================================
+  // ==================================================
 
   const [
     isSaleActive,
     setIsSaleActive,
   ] = useState(() =>
-    isFlashSaleCurrentlyActive(
-      product
-    )
+    isFlashSaleCurrentlyActive(product)
   );
 
-  // ========================================
+  // ==================================================
   // CHECK SALE EVERY SECOND
-  // ========================================
+  // ==================================================
 
   useEffect(() => {
     const checkSale = () => {
       setIsSaleActive(
-        isFlashSaleCurrentlyActive(
-          product
-        )
+        isFlashSaleCurrentlyActive(product)
       );
     };
 
     checkSale();
 
-    const interval =
-      setInterval(
-        checkSale,
-        1000
-      );
+    const interval = setInterval(
+      checkSale,
+      1000
+    );
 
     return () => {
-      clearInterval(
-        interval
-      );
+      clearInterval(interval);
     };
   }, [product]);
 
-  // ========================================
-  // IMAGE
-  // ========================================
+  // ==================================================
+  // PRODUCT DATA
+  // ==================================================
+
+  const productId =
+    product._id?.toString() || "";
 
   const image =
     product.images?.[0]?.url ||
     "/placeholder.png";
 
-  // ========================================
-  // PRICES
-  // ========================================
-
   const regularPrice =
     Number(product.price);
 
   const flashPrice =
-    Number(
-      product.flashSalePrice ??
-        regularPrice
-    );
+    product.flashSalePrice !==
+      undefined
+      ? Number(
+          product.flashSalePrice
+        )
+      : regularPrice;
 
-  // ========================================
-  // ACTUAL DISPLAY PRICE
-  // ========================================
+  // ==================================================
+  // CURRENT PRICE
+  // ==================================================
 
   const currentPrice =
     isSaleActive &&
@@ -162,15 +216,14 @@ export default function FlashSaleCard({
       ? flashPrice
       : regularPrice;
 
-  // ========================================
+  // ==================================================
   // DISCOUNT
-  // ========================================
+  // ==================================================
 
   const discount =
     isSaleActive &&
     regularPrice > 0 &&
-    currentPrice <
-      regularPrice
+    currentPrice < regularPrice
       ? Math.round(
           ((regularPrice -
             currentPrice) /
@@ -179,33 +232,44 @@ export default function FlashSaleCard({
         )
       : 0;
 
-  // ========================================
+  // ==================================================
   // ADD TO CART
-  // ========================================
+  // ==================================================
 
-  const handleAddToCart =
-    () => {
-      if (
-        Number(product.stock) <=
-        0
-      ) {
-        toast.error(
-          "Product is out of stock"
-        );
+  const handleAddToCart = () => {
+    const stock = Number(
+      product.stock ?? 0
+    );
 
-        return;
-      }
-
-      addToCart(product);
-
-      toast.success(
-        `${product.title} added to cart`
+    if (stock <= 0) {
+      toast.error(
+        "Product is out of stock"
       );
-    };
 
-  // ========================================
+      return;
+    }
+
+    if (!productId) {
+      toast.error(
+        "Product information is invalid"
+      );
+
+      return;
+    }
+
+    addToCart({
+      ...product,
+      _id: productId,
+    });
+
+    toast.success(
+      `${product.title} added to cart`
+    );
+  };
+
+  // ==================================================
   // RENDER
-  // ========================================
+  // ==================================================
 
   return (
     <article
@@ -220,9 +284,9 @@ export default function FlashSaleCard({
         hover:shadow-[0_20px_50px_rgba(0,0,0,0.12)]
       "
     >
-      {/* ========================================
+      {/* ==================================================
           IMAGE
-      ======================================== */}
+      ================================================== */}
 
       <div className="relative overflow-hidden bg-slate-100">
         {/* Flash Sale Badge */}
@@ -271,11 +335,11 @@ export default function FlashSaleCard({
         <button
           type="button"
           aria-label="Add to wishlist"
-          onClick={() => {
+          onClick={() =>
             toast.success(
               "Wishlist feature coming soon"
-            );
-          }}
+            )
+          }
           className="
             absolute bottom-4 right-4 z-20
             flex h-10 w-10
@@ -295,7 +359,7 @@ export default function FlashSaleCard({
         {/* Product Image */}
 
         <Link
-          href={`/products/${product._id}`}
+          href={`/products/${productId}`}
           className="block"
         >
           <div
@@ -341,7 +405,7 @@ export default function FlashSaleCard({
           "
         >
           <Link
-            href={`/products/${product._id}`}
+            href={`/products/${productId}`}
             className="
               pointer-events-auto
               flex translate-y-5
@@ -362,9 +426,9 @@ export default function FlashSaleCard({
         </div>
       </div>
 
-      {/* ========================================
+      {/* ==================================================
           PRODUCT INFO
-      ======================================== */}
+      ================================================== */}
 
       <div className="space-y-4 p-5">
         {/* Category */}
@@ -384,7 +448,7 @@ export default function FlashSaleCard({
         {/* Title */}
 
         <Link
-          href={`/products/${product._id}`}
+          href={`/products/${productId}`}
         >
           <h3
             className="
@@ -402,9 +466,7 @@ export default function FlashSaleCard({
           </h3>
         </Link>
 
-        {/* ========================================
-            PRICE
-        ======================================== */}
+        {/* Price */}
 
         <div className="flex items-end gap-3">
           <span
@@ -450,9 +512,7 @@ export default function FlashSaleCard({
             )}
         </div>
 
-        {/* ========================================
-            COUNTDOWN
-        ======================================== */}
+        {/* Countdown */}
 
         {isSaleActive &&
           product.flashSaleEnd && (
@@ -463,14 +523,12 @@ export default function FlashSaleCard({
             />
           )}
 
-        {/* ========================================
-            ADD TO CART
-        ======================================== */}
+        {/* Add To Cart */}
 
         <button
           type="button"
           disabled={
-            Number(product.stock) <=
+            Number(product.stock ?? 0) <=
             0
           }
           onClick={
@@ -496,13 +554,11 @@ export default function FlashSaleCard({
             disabled:bg-slate-300
           "
         >
-          <ShoppingCart
-            size={18}
-          />
+          <ShoppingCart size={18} />
 
           <span>
             {Number(
-              product.stock
+              product.stock ?? 0
             ) <= 0
               ? "Out of Stock"
               : "Add to Cart"}
@@ -513,15 +569,13 @@ export default function FlashSaleCard({
   );
 }
 
-// ========================================
+// ==================================================
 // FLASH COUNTDOWN
-// ========================================
+// ==================================================
 
 function FlashCountdown({
   endDate,
-}: {
-  endDate: string;
-}) {
+}: FlashCountdownProps) {
   const [
     timeLeft,
     setTimeLeft,
@@ -538,16 +592,13 @@ function FlashCountdown({
 
     update();
 
-    const interval =
-      setInterval(
-        update,
-        1000
-      );
+    const interval = setInterval(
+      update,
+      1000
+    );
 
     return () => {
-      clearInterval(
-        interval
-      );
+      clearInterval(interval);
     };
   }, [endDate]);
 
@@ -618,9 +669,9 @@ function FlashCountdown({
   );
 }
 
-// ========================================
+// ==================================================
 // COUNTDOWN BOX
-// ========================================
+// ==================================================
 
 function CountdownBox({
   value,
@@ -644,77 +695,4 @@ function CountdownBox({
       {value}
     </span>
   );
-}
-
-// ========================================
-// GET TIME LEFT
-// ========================================
-
-function getTimeLeft(
-  endDate: string
-) {
-  const endTime =
-    new Date(
-      endDate
-    ).getTime();
-
-  if (
-    !Number.isFinite(
-      endTime
-    )
-  ) {
-    return {
-      total: 0,
-      hours: "00",
-      minutes: "00",
-      seconds: "00",
-    };
-  }
-
-  const difference =
-    endTime - Date.now();
-
-  if (difference <= 0) {
-    return {
-      total: 0,
-      hours: "00",
-      minutes: "00",
-      seconds: "00",
-    };
-  }
-
-  const totalSeconds =
-    Math.floor(
-      difference / 1000
-    );
-
-  const hours =
-    Math.floor(
-      totalSeconds / 3600
-    );
-
-  const minutes =
-    Math.floor(
-      (totalSeconds % 3600) /
-        60
-    );
-
-  const seconds =
-    totalSeconds % 60;
-
-  return {
-    total: difference,
-
-    hours: String(
-      hours
-    ).padStart(2, "0"),
-
-    minutes: String(
-      minutes
-    ).padStart(2, "0"),
-
-    seconds: String(
-      seconds
-    ).padStart(2, "0"),
-  };
 }

@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
 import Link from "next/link";
-
 import { Loader2, Plus, Search } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -18,14 +16,11 @@ import ProductTable, {
 import FlashSaleDialog from "./FlashSaleDialog";
 
 export default function AdminProducts() {
-  const [products, setProducts] =
-    useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
 
-  const [search, setSearch] =
-    useState("");
+  const [search, setSearch] = useState("");
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
   const [deletingId, setDeletingId] =
     useState<string | null>(null);
@@ -55,8 +50,7 @@ export default function AdminProducts() {
         }
       );
 
-      const result =
-        await response.json();
+      const result = await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -98,35 +92,28 @@ export default function AdminProducts() {
       return products;
     }
 
-    return products.filter(
-      (product) => {
-        const title =
-          product.title
-            ?.toLowerCase() || "";
+    return products.filter((product) => {
+      const title =
+        product.title?.toLowerCase() || "";
 
-        const category =
-          product.category
-            ?.toLowerCase() || "";
+      const category =
+        product.category?.toLowerCase() || "";
 
-        return (
-          title.includes(query) ||
-          category.includes(query)
-        );
-      }
-    );
+      return (
+        title.includes(query) ||
+        category.includes(query)
+      );
+    });
   }, [products, search]);
 
   // ========================================
   // DELETE
   // ========================================
 
-  const handleDelete = async (
-    id: string
-  ) => {
-    const confirmed =
-      window.confirm(
-        "Are you sure you want to delete this product?"
-      );
+  const handleDelete = async (id: string) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this product?"
+    );
 
     if (!confirmed) {
       return;
@@ -142,8 +129,7 @@ export default function AdminProducts() {
         }
       );
 
-      const result =
-        await response.json();
+      const result = await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -152,12 +138,10 @@ export default function AdminProducts() {
         );
       }
 
-      setProducts(
-        (previous) =>
-          previous.filter(
-            (product) =>
-              product._id !== id
-          )
+      setProducts((previous) =>
+        previous.filter(
+          (product) => product._id !== id
+        )
       );
     } catch (error) {
       console.error(
@@ -202,8 +186,7 @@ export default function AdminProducts() {
         }
       );
 
-      const result =
-        await response.json();
+      const result = await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -212,14 +195,12 @@ export default function AdminProducts() {
         );
       }
 
-      setProducts(
-        (previous) =>
-          previous.map(
-            (item) =>
-              item._id === product._id
-                ? result.data
-                : item
-          )
+      setProducts((previous) =>
+        previous.map((item) =>
+          item._id === product._id
+            ? result.data
+            : item
+        )
       );
     } catch (error) {
       console.error(
@@ -241,39 +222,48 @@ export default function AdminProducts() {
   // OPEN FLASH SALE
   // ========================================
 
-const handleFlashSale = (
-  product: Product
-) => {
-  setFlashSaleProduct(product);
-  setFlashSaleOpen(true);
-};
+  const handleFlashSale = (
+    product: Product
+  ) => {
+    setFlashSaleProduct(product);
+    setFlashSaleOpen(true);
+  };
 
   // ========================================
   // FLASH SALE SUCCESS
   // ========================================
 
-const handleFlashSaleSuccess = (
-  updatedProduct: Product
-) => {
-  if (!updatedProduct?._id) {
-    console.error(
-      "Flash Sale Success: Updated product is missing."
+  const handleFlashSaleSuccess = (
+    updatedProduct: Product
+  ) => {
+    if (!updatedProduct?._id) {
+      console.error(
+        "Flash Sale Success: Updated product is missing."
+      );
+
+      return;
+    }
+
+    setProducts((previous) =>
+      previous.map((product) =>
+        product._id === updatedProduct._id
+          ? {
+              ...product,
+              ...updatedProduct,
+            }
+          : product
+      )
     );
 
-    return;
-  }
-
-  setProducts((previous) =>
-    previous.map((product) =>
-      product._id === updatedProduct._id
+    setFlashSaleProduct((current) =>
+      current?._id === updatedProduct._id
         ? {
-            ...product,
+            ...current,
             ...updatedProduct,
           }
-        : product
-    )
-  );
-};
+        : current
+    );
+  };
 
   // ========================================
   // LOADING
@@ -284,7 +274,6 @@ const handleFlashSaleSuccess = (
       <div className="flex min-h-[400px] items-center justify-center">
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <Loader2 className="h-5 w-5 animate-spin" />
-
           Loading products...
         </div>
       </div>
@@ -315,7 +304,6 @@ const handleFlashSaleSuccess = (
         <Button asChild>
           <Link href="/admin/products/create">
             <Plus className="mr-2 h-4 w-4" />
-
             Add Product
           </Link>
         </Button>
@@ -329,9 +317,7 @@ const handleFlashSaleSuccess = (
         <Input
           value={search}
           onChange={(event) =>
-            setSearch(
-              event.target.value
-            )
+            setSearch(event.target.value)
           }
           placeholder="Search products..."
           className="pl-9"
@@ -340,11 +326,9 @@ const handleFlashSaleSuccess = (
 
       {/* Stats */}
 
-      <ProductStats
-        products={products}
-      />
+      <ProductStats products={products} />
 
-      {/* Search result info */}
+      {/* Search Result */}
 
       {search.trim() && (
         <p className="text-sm text-slate-500">
@@ -353,8 +337,7 @@ const handleFlashSaleSuccess = (
             {filteredProducts.length}
           </span>{" "}
           result
-          {filteredProducts.length !==
-          1
+          {filteredProducts.length !== 1
             ? "s"
             : ""}{" "}
           for "{search}"
@@ -371,25 +354,27 @@ const handleFlashSaleSuccess = (
         onFeaturedToggle={
           handleFeaturedToggle
         }
-        onFlashSale={
-          handleFlashSale
-        }
+        onFlashSale={handleFlashSale}
       />
 
       {/* Flash Sale Dialog */}
-<FlashSaleDialog
-  key={flashSaleProduct?._id ?? "flash-sale-dialog"}
-  product={flashSaleProduct}
-  open={flashSaleOpen}
-  onOpenChange={(open) => {
-    setFlashSaleOpen(open);
 
-    if (!open) {
-      setFlashSaleProduct(null);
-    }
-  }}
-  onSuccess={handleFlashSaleSuccess}
-/>
+      <FlashSaleDialog
+        key={
+          flashSaleProduct?._id ??
+          "flash-sale-dialog"
+        }
+        product={flashSaleProduct}
+        open={flashSaleOpen}
+        onOpenChange={(open) => {
+          setFlashSaleOpen(open);
+
+          if (!open) {
+            setFlashSaleProduct(null);
+          }
+        }}
+        onSuccess={handleFlashSaleSuccess}
+      />
     </div>
   );
 }

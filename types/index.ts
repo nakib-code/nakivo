@@ -90,6 +90,6 @@ export interface IOrder extends Document {
   totalPrice: number;
   isPaid: boolean;
   status: "Pending" | "Processing" | "Delivered" | "Cancelled";
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }

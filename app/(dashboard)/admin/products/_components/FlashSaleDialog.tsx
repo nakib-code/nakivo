@@ -14,18 +14,9 @@ import {
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Product } from "./ProductTable";
 
-interface Product {
-  _id: string;
-  title: string;
-  price: number;
 
-  isFlashSale: boolean;
-
-  flashSalePrice?: number;
-  flashSaleStart?: string;
-  flashSaleEnd?: string;
-}
 
 interface FlashSaleDialogProps {
   product: Product | null;
