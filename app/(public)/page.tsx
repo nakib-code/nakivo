@@ -7,15 +7,32 @@ import WhyChooseUs from "@/components/home/WhyChooseUs";
 import { getProducts } from "@/service/product.service";
 
 export default async function HomePage() {
-  const products = await getProducts(8);
+  const featuredProducts = await getProducts({
+    limit: 8,
+    featured: true,
+  });
+
+  const flashSaleProducts = await getProducts({
+    limit: 8,
+    flashSale: true,
+  });
 
   return (
     <main className="space-y-20">
       <Hero />
-      <FeaturedProducts products={products} />
-      <FlashSale />
+
+      <FeaturedProducts
+        products={featuredProducts}
+      />
+
+      <FlashSale
+        products={flashSaleProducts}
+      />
+
       <PromoBanner />
+
       <WhyChooseUs />
+
       <Newsletter />
     </main>
   );

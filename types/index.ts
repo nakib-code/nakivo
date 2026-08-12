@@ -42,9 +42,24 @@ export interface IProduct {
 
   stock: number;
 
-  images: IProductImage[];
+  images: {
+    url: string;
+    publicId: string;
+  }[];
 
   ratings: number;
+
+  soldCount: number;
+
+  isFeatured: boolean;
+
+  isFlashSale: boolean;
+
+  flashSalePrice?: number;
+
+  flashSaleStart?: Date;
+
+  flashSaleEnd?: Date;
 
   createdAt?: Date;
 

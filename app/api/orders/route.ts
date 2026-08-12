@@ -6,9 +6,120 @@ import { getCurrentUser } from "@/lib/auth";
 import Order from "@/models/Order";
 import Product from "@/models/Product";
 
-// ========================================
+// ==================================================
+// TYPES
+// ==================================================
+
+interface OrderItemInput {
+  product: string;
+  quantity: number;
+}
+
+interface ShippingAddressInput {
+  address: string;
+  city: string;
+  phone: string;
+}
+
+// ==================================================
+// FLASH SALE PRICE HELPER
+// ==================================================
+
+function getActiveProductPrice(product: {
+  price: number;
+  isFlashSale?: boolean;
+  flashSalePrice?: number;
+  flashSaleStart?: Date | string;
+  flashSaleEnd?: Date | string;
+}) {
+  const regularPrice = Number(product.price);
+
+  // ----------------------------------------
+  // Invalid regular price
+  // ----------------------------------------
+
+  if (
+    !Number.isFinite(regularPrice) ||
+    regularPrice < 0
+  ) {
+    return {
+      price: 0,
+      isFlashSale: false,
+    };
+  }
+
+  // ----------------------------------------
+  // No flash sale
+  // ----------------------------------------
+
+  if (
+    !product.isFlashSale ||
+    product.flashSalePrice === undefined ||
+    !product.flashSaleStart ||
+    !product.flashSaleEnd
+  ) {
+    return {
+      price: regularPrice,
+      isFlashSale: false,
+    };
+  }
+
+  // ----------------------------------------
+  // Flash Sale Dates
+  // ----------------------------------------
+
+  const now = Date.now();
+
+  const start = new Date(
+    product.flashSaleStart
+  ).getTime();
+
+  const end = new Date(
+    product.flashSaleEnd
+  ).getTime();
+
+  const flashPrice = Number(
+    product.flashSalePrice
+  );
+
+  // ----------------------------------------
+  // Validate Flash Sale
+  // ----------------------------------------
+
+  const isActive =
+    Number.isFinite(start) &&
+    Number.isFinite(end) &&
+    Number.isFinite(flashPrice) &&
+    start <= end &&
+    now >= start &&
+    now <= end &&
+    flashPrice > 0 &&
+    flashPrice < regularPrice;
+
+  // ----------------------------------------
+  // Active Flash Sale
+  // ----------------------------------------
+
+  if (isActive) {
+    return {
+      price: flashPrice,
+      isFlashSale: true,
+    };
+  }
+
+  // ----------------------------------------
+  // Flash Sale Inactive / Expired
+  // ----------------------------------------
+
+  return {
+    price: regularPrice,
+    isFlashSale: false,
+  };
+}
+
+// ==================================================
 // CREATE ORDER
-// ========================================
+// ==================================================
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,7 +135,9 @@ export async function POST(req: NextRequest) {
           success: false,
           message: "Authentication required",
         },
-        { status: 401 }
+        {
+          status: 401,
+        }
       );
     }
 
@@ -44,19 +157,29 @@ export async function POST(req: NextRequest) {
       items,
       shippingAddress,
       paymentMethod = "COD",
-    } = body;
+    } = body as {
+      items: OrderItemInput[];
+      shippingAddress: ShippingAddressInput;
+      paymentMethod?: "COD" | "STRIPE";
+    };
 
     // ========================================
     // Validate Items
     // ========================================
 
-    if (!Array.isArray(items) || items.length === 0) {
+    if (
+      !Array.isArray(items) ||
+      items.length === 0
+    ) {
       return NextResponse.json(
         {
           success: false,
-          message: "Order must contain at least one product",
+          message:
+            "Order must contain at least one product",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -68,9 +191,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message: "Shipping address is required",
+          message:
+            "Shipping address is required",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -84,9 +210,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message: "Shipping address is required",
+          message:
+            "Shipping address is required",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -96,7 +225,9 @@ export async function POST(req: NextRequest) {
           success: false,
           message: "City is required",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -104,9 +235,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message: "Phone number is required",
+          message:
+            "Phone number is required",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -114,13 +248,20 @@ export async function POST(req: NextRequest) {
     // Validate Payment Method
     // ========================================
 
-    if (!["COD", "STRIPE"].includes(paymentMethod)) {
+    if (
+      !["COD", "STRIPE"].includes(
+        paymentMethod
+      )
+    ) {
       return NextResponse.json(
         {
           success: false,
-          message: "Invalid payment method",
+          message:
+            "Invalid payment method",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -132,26 +273,35 @@ export async function POST(req: NextRequest) {
 
     let totalPrice = 0;
 
+    // ========================================
+    // Process Each Product
+    // ========================================
+
     for (const item of items) {
-      // -------------------------
+      // ----------------------------------------
       // Validate Product ID
-      // -------------------------
+      // ----------------------------------------
 
       if (!item.product) {
         return NextResponse.json(
           {
             success: false,
-            message: "Product ID is required",
+            message:
+              "Product ID is required",
           },
-          { status: 400 }
+          {
+            status: 400,
+          }
         );
       }
 
-      // -------------------------
+      // ----------------------------------------
       // Validate Quantity
-      // -------------------------
+      // ----------------------------------------
 
-      const quantity = Number(item.quantity);
+      const quantity = Number(
+        item.quantity
+      );
 
       if (
         !Number.isInteger(quantity) ||
@@ -160,70 +310,123 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            message: "Invalid product quantity",
+            message:
+              "Invalid product quantity",
           },
-          { status: 400 }
+          {
+            status: 400,
+          }
         );
       }
 
-      // -------------------------
+      // ----------------------------------------
       // Find Product
-      // -------------------------
+      // ----------------------------------------
 
-      const product = await Product.findById(
-        item.product
-      );
+      const product =
+        await Product.findById(
+          item.product
+        );
 
       if (!product) {
         return NextResponse.json(
           {
             success: false,
-            message: "One of the selected products was not found",
+            message:
+              "One of the selected products was not found",
           },
-          { status: 404 }
+          {
+            status: 404,
+          }
         );
       }
 
-      // -------------------------
+      // ----------------------------------------
       // Check Stock
-      // -------------------------
+      // ----------------------------------------
 
-      if (product.stock < quantity) {
+      if (
+        product.stock < quantity
+      ) {
         return NextResponse.json(
           {
             success: false,
             message: `${product.title} has only ${product.stock} items available`,
           },
-          { status: 400 }
+          {
+            status: 400,
+          }
         );
       }
 
-      // -------------------------
-      // Calculate Price
-      // -------------------------
+      // ----------------------------------------
+      // Get Server-Side Price
+      // ----------------------------------------
+
+      const {
+        price: finalPrice,
+        isFlashSale,
+      } =
+        getActiveProductPrice(
+          product
+        );
+
+      // ----------------------------------------
+      // Validate Final Price
+      // ----------------------------------------
+
+      if (
+        !Number.isFinite(
+          finalPrice
+        ) ||
+        finalPrice <= 0
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `Invalid price for ${product.title}`,
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      // ----------------------------------------
+      // Calculate Item Total
+      // ----------------------------------------
 
       const itemTotal =
-        product.price * quantity;
+        finalPrice * quantity;
 
       totalPrice += itemTotal;
 
-      // -------------------------
-      // Get Main Image
-      // -------------------------
+      // ----------------------------------------
+      // Product Image
+      // ----------------------------------------
 
       const image =
-        product.images?.[0]?.url || "";
+        product.images?.[0]?.url ||
+        "";
 
-      // -------------------------
-      // Create Order Item
-      // -------------------------
+      // ----------------------------------------
+      // Save Order Item
+      // ----------------------------------------
 
       orderItems.push({
         product: product._id,
         title: product.title,
         quantity,
         image,
-        price: product.price,
+
+        // IMPORTANT:
+        // Save the actual price paid
+        price: finalPrice,
+
+        // This is optional.
+        // Remove if your OrderSchema
+        // does not contain this field.
+        isFlashSale,
       });
     }
 
@@ -231,13 +434,19 @@ export async function POST(req: NextRequest) {
     // Validate Total
     // ========================================
 
-    if (totalPrice <= 0) {
+    if (
+      !Number.isFinite(totalPrice) ||
+      totalPrice <= 0
+    ) {
       return NextResponse.json(
         {
           success: false,
-          message: "Invalid order total",
+          message:
+            "Invalid order total",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -245,25 +454,29 @@ export async function POST(req: NextRequest) {
     // Create Order
     // ========================================
 
-    const order = await Order.create({
-      user: user.id,
+    const order =
+      await Order.create({
+        user: user.id,
 
-      orderItems,
+        orderItems,
 
-      shippingAddress: {
-        address: address.trim(),
-        city: city.trim(),
-        phone: phone.trim(),
-      },
+        shippingAddress: {
+          address:
+            address.trim(),
 
-      paymentMethod,
+          city: city.trim(),
 
-      totalPrice,
+          phone: phone.trim(),
+        },
 
-      isPaid: false,
+        paymentMethod,
 
-      status: "Pending",
-    });
+        totalPrice,
+
+        isPaid: false,
+
+        status: "Pending",
+      });
 
     // ========================================
     // Reduce Product Stock
@@ -287,10 +500,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        message: "Order created successfully",
+
+        message:
+          "Order created successfully",
+
         data: order,
       },
-      { status: 201 }
+      {
+        status: 201,
+      }
     );
   } catch (error) {
     console.error(
@@ -301,19 +519,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: false,
+
         message:
           error instanceof Error
             ? error.message
             : "Failed to create order",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
 
-// ========================================
+// ==================================================
 // GET ORDERS
-// ========================================
+// ==================================================
 
 export async function GET() {
   try {
@@ -321,15 +542,19 @@ export async function GET() {
     // Authentication
     // ========================================
 
-    const user = await getCurrentUser();
+    const user =
+      await getCurrentUser();
 
     if (!user) {
       return NextResponse.json(
         {
           success: false,
-          message: "Authentication required",
+          message:
+            "Authentication required",
         },
-        { status: 401 }
+        {
+          status: 401,
+        }
       );
     }
 
@@ -340,27 +565,34 @@ export async function GET() {
     await connectDB();
 
     // ========================================
-    // Admin → Get All Orders
-    // Customer → Get Own Orders
+    // Admin → All Orders
+    // Customer → Own Orders
     // ========================================
 
     const query =
       user.role === "admin"
         ? {}
-        : { user: user.id };
+        : {
+            user: user.id,
+          };
 
-    const orders = await Order.find(query)
-      .populate(
-        "user",
-        "name email image"
-      )
-      .populate(
-        "orderItems.product",
-        "title price images"
-      )
-      .sort({
-        createdAt: -1,
-      });
+    // ========================================
+    // Fetch Orders
+    // ========================================
+
+    const orders =
+      await Order.find(query)
+        .populate(
+          "user",
+          "name email image"
+        )
+        .populate(
+          "orderItems.product",
+          "title price images isFlashSale flashSalePrice flashSaleStart flashSaleEnd"
+        )
+        .sort({
+          createdAt: -1,
+        });
 
     // ========================================
     // Response
@@ -371,7 +603,9 @@ export async function GET() {
         success: true,
         data: orders,
       },
-      { status: 200 }
+      {
+        status: 200,
+      }
     );
   } catch (error) {
     console.error(
@@ -387,7 +621,9 @@ export async function GET() {
             ? error.message
             : "Failed to fetch orders",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }

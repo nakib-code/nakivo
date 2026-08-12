@@ -8,6 +8,10 @@ import { uploadToCloudinary } from "@/lib/cloudinary";
 // GET PRODUCTS
 // ========================================
 
+// ========================================
+// GET PRODUCTS
+// ========================================
+
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
@@ -16,12 +20,23 @@ export async function GET(req: NextRequest) {
 
     const category = searchParams.get("category");
     const search = searchParams.get("search");
+    const featured = searchParams.get("featured");
+    const flashSale = searchParams.get("flashSale");
+    const limitValue = searchParams.get("limit");
 
     const query: Record<string, unknown> = {};
+
+    // ========================================
+    // CATEGORY FILTER
+    // ========================================
 
     if (category) {
       query.category = category;
     }
+
+    // ========================================
+    // SEARCH FILTER
+    // ========================================
 
     if (search) {
       query.title = {
@@ -30,9 +45,40 @@ export async function GET(req: NextRequest) {
       };
     }
 
-    const products = await Product.find(query).sort({
+    // ========================================
+    // FEATURED FILTER
+    // ========================================
+
+    if (featured === "true") {
+      query.isFeatured = true;
+    }
+
+    // ========================================
+    // FLASH SALE FILTER
+    // ========================================
+
+    if (flashSale === "true") {
+      query.isFlashSale = true;
+    }
+
+    // ========================================
+    // LIMIT
+    // ========================================
+
+    const limit = Number(limitValue);
+
+    const productsQuery = Product.find(query).sort({
       createdAt: -1,
     });
+
+    if (
+      Number.isInteger(limit) &&
+      limit > 0
+    ) {
+      productsQuery.limit(limit);
+    }
+
+    const products = await productsQuery;
 
     return NextResponse.json(
       {
@@ -42,7 +88,10 @@ export async function GET(req: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error("GET Products Error:", error);
+    console.error(
+      "GET Products Error:",
+      error
+    );
 
     return NextResponse.json(
       {
@@ -53,7 +102,6 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-
 // ========================================
 // CREATE PRODUCT
 // ========================================

@@ -17,14 +17,16 @@ const allowedStatuses = [
   "Cancelled",
 ] as const;
 
+type OrderStatus = (typeof allowedStatuses)[number];
+
 export async function PATCH(
   req: NextRequest,
   { params }: RouteParams
 ) {
   try {
-    // =========================
+    // ========================================
     // Authentication
-    // =========================
+    // ========================================
 
     const user = await getCurrentUser();
 
@@ -38,9 +40,9 @@ export async function PATCH(
       );
     }
 
-    // =========================
+    // ========================================
     // Admin Authorization
-    // =========================
+    // ========================================
 
     if (user.role !== "admin") {
       return NextResponse.json(
@@ -52,31 +54,45 @@ export async function PATCH(
       );
     }
 
-    // =========================
+    // ========================================
     // Database
-    // =========================
+    // ========================================
 
     await connectDB();
 
-    // =========================
+    // ========================================
     // Params
-    // =========================
+    // ========================================
 
     const { id } = await params;
 
-    // =========================
+    if (!id) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Order ID is required",
+        },
+        { status: 400 }
+      );
+    }
+
+    // ========================================
     // Request Body
-    // =========================
+    // ========================================
 
     const body = await req.json();
 
-    const { status } = body;
+    const status = body.status as string;
 
-    // =========================
+    // ========================================
     // Validate Status
-    // =========================
+    // ========================================
 
-    if (!allowedStatuses.includes(status)) {
+    if (
+      !allowedStatuses.includes(
+        status as OrderStatus
+      )
+    ) {
       return NextResponse.json(
         {
           success: false,
@@ -86,9 +102,9 @@ export async function PATCH(
       );
     }
 
-    // =========================
+    // ========================================
     // Find Order
-    // =========================
+    // ========================================
 
     const order = await Order.findById(id);
 
@@ -102,22 +118,23 @@ export async function PATCH(
       );
     }
 
-    // =========================
+    // ========================================
     // Update Status
-    // =========================
+    // ========================================
 
-    order.status = status;
+    order.status = status as OrderStatus;
 
     await order.save();
 
-    // =========================
+    // ========================================
     // Response
-    // =========================
+    // ========================================
 
     return NextResponse.json(
       {
         success: true,
-        message: "Order status updated successfully",
+        message:
+          "Order status updated successfully",
         data: order,
       },
       { status: 200 }

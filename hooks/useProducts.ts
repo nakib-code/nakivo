@@ -1,3 +1,5 @@
+"use client";
+
 import {
   useQuery,
   useMutation,
@@ -7,268 +9,246 @@ import {
 import { toast } from "sonner";
 import { IProduct } from "@/types";
 
+// ========================================
+// TYPES
+// ========================================
 
-// =========================
-// Fetch All Products
-// =========================
+interface GetProductsOptions {
+  category?: string;
+  search?: string;
+  featured?: boolean;
+  flashSale?: boolean;
+}
+
+// ========================================
+// FETCH PRODUCTS
+// ========================================
 
 export function useGetProducts(
-  category?: string,
-  search?: string
+  options: GetProductsOptions = {}
 ) {
+  const {
+    category,
+    search,
+    featured,
+    flashSale,
+  } = options;
 
   return useQuery({
-
     queryKey: [
       "products",
       {
         category,
         search,
+        featured,
+        flashSale,
       },
     ],
 
-
     queryFn: async () => {
+      const params = new URLSearchParams();
 
-      const params =
-        new URLSearchParams();
+      // Category
+      if (category) {
+        params.set("category", category);
+      }
 
+      // Search
+      if (search) {
+        params.set("search", search);
+      }
 
-      if(category)
-        params.append(
-          "category",
-          category
+      // Featured
+      if (featured !== undefined) {
+        params.set(
+          "featured",
+          featured.toString()
         );
+      }
 
-
-      if(search)
-        params.append(
-          "search",
-          search
+      // Flash Sale
+      if (flashSale !== undefined) {
+        params.set(
+          "flashSale",
+          flashSale.toString()
         );
+      }
 
+      const queryString = params.toString();
 
-      const res =
-        await fetch(
-          `/api/products?${params}`
-        );
+      const url = queryString
+        ? `/api/products?${queryString}`
+        : "/api/products";
 
+      const res = await fetch(url, {
+        cache: "no-store",
+      });
 
-      const json =
-        await res.json();
+      const json = await res.json();
 
-
-      if(!json.success)
+      if (!res.ok || !json.success) {
         throw new Error(
-          json.message
+          json.message ||
+            "Failed to fetch products"
         );
+      }
 
-
-      return json.data as IProduct[];
-
+      return Array.isArray(json.data)
+        ? (json.data as IProduct[])
+        : [];
     },
 
+    staleTime: 30 * 1000,
   });
-
 }
 
-
-
-// =========================
-// Single Product
-// =========================
+// ========================================
+// SINGLE PRODUCT
+// ========================================
 
 export function useSingleProduct(
-  id:string
-){
-
+  id: string
+) {
   return useQuery({
+    queryKey: ["product", id],
 
-    queryKey:[
-      "product",
-      id,
-    ],
-
-
-    queryFn: async()=>{
-
-      const res =
-        await fetch(
-          `/api/products/${id}`
-        );
-
-
-      const json =
-        await res.json();
-
-
-      if(!res.ok)
-        throw new Error(
-          json.message
-        );
-
-
-      return json.data as IProduct;
-
-    },
-
-
-    enabled:
-      !!id,
-
-  });
-
-}
-
-
-
-// =========================
-// Create Product
-// =========================
-
-export function useCreateProduct(){
-
- const queryClient =
-   useQueryClient();
-
-
- return useMutation({
-
-  mutationFn:
-   async(
-    newProduct:Partial<IProduct>
-   )=>{
-
-
-    const res =
-      await fetch(
-        "/api/products",
-        {
-          method:"POST",
-
-          headers:{
-            "Content-Type":
-            "application/json",
-          },
-
-
-          body:
-          JSON.stringify(
-            newProduct
-          ),
-
-        }
-      );
-
-
-    const json =
-      await res.json();
-
-
-    if(!json.success)
-      throw new Error(
-        json.message
-      );
-
-
-    return json.data;
-
-   },
-
-
-   onSuccess:()=>{
-
-    queryClient.invalidateQueries({
-      queryKey:[
-        "products",
-      ],
-    });
-
-
-    toast.success(
-      "Product created"
-    );
-
-   }
-
- });
-
-}
-
-
-
-// =========================
-// Update Product
-// =========================
-
-export function useUpdateProduct(){
-
- const queryClient =
-   useQueryClient();
-
-
- return useMutation({
-
-  mutationFn:
-  async({
-    id,
-    formData,
-  }:{
-    id:string;
-    formData:FormData;
-  })=>{
-
-
-    const res =
-      await fetch(
+    queryFn: async () => {
+      const res = await fetch(
         `/api/products/${id}`,
         {
-          method:"PUT",
-          body:formData,
+          cache: "no-store",
         }
       );
 
+      const json = await res.json();
 
-    const json =
-      await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(
+          json.message ||
+            "Failed to fetch product"
+        );
+      }
 
+      return json.data as IProduct;
+    },
 
-    if(!res.ok)
-      throw new Error(
-        json.message
+    enabled: Boolean(id),
+
+    staleTime: 30 * 1000,
+  });
+}
+
+// ========================================
+// CREATE PRODUCT
+// ========================================
+
+export function useCreateProduct() {
+  const queryClient =
+    useQueryClient();
+
+  return useMutation({
+    mutationFn: async (
+      formData: FormData
+    ) => {
+      const res = await fetch(
+        "/api/products",
+        {
+          method: "POST",
+          body: formData,
+        }
       );
 
+      const json = await res.json();
 
-    return json.data;
+      if (!res.ok || !json.success) {
+        throw new Error(
+          json.message ||
+            "Failed to create product"
+        );
+      }
 
-  },
+      return json.data as IProduct;
+    },
 
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["products"],
+      });
 
-  onSuccess:(_,variables)=>{
+      toast.success(
+        "Product created successfully"
+      );
+    },
 
+    onError: (error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to create product"
+      );
+    },
+  });
+}
 
-    queryClient.invalidateQueries({
-      queryKey:[
-        "products",
-      ],
-    });
+// ========================================
+// UPDATE PRODUCT
+// ========================================
 
+export function useUpdateProduct() {
+  const queryClient =
+    useQueryClient();
 
-    queryClient.invalidateQueries({
-      queryKey:[
-        "product",
-        variables.id,
-      ],
-    });
+  return useMutation({
+    mutationFn: async ({
+      id,
+      formData,
+    }: {
+      id: string;
+      formData: FormData;
+    }) => {
+      const res = await fetch(
+        `/api/products/${id}`,
+        {
+          method: "PUT",
+          body: formData,
+        }
+      );
 
+      const json = await res.json();
 
-    toast.success(
-      "Product updated"
-    );
+      if (!res.ok || !json.success) {
+        throw new Error(
+          json.message ||
+            "Failed to update product"
+        );
+      }
 
-  },
+      return json.data as IProduct;
+    },
 
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["products"],
+      });
 
- });
+      queryClient.invalidateQueries({
+        queryKey: [
+          "product",
+          variables.id,
+        ],
+      });
 
+      toast.success(
+        "Product updated successfully"
+      );
+    },
+
+    onError: (error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to update product"
+      );
+    },
+  });
 }

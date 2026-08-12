@@ -10,9 +10,21 @@ export default function FeaturedProducts({
 }: Props) {
   return (
     <section
-  id="featured-products"
-  className=" mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 py-10 sm:py-12 lg:py-16 "
->
+      id="featured-products"
+      className="
+        mx-auto
+        w-full
+        max-w-[1600px]
+        px-4
+        py-10
+        sm:px-6
+        sm:py-12
+        lg:px-8
+        lg:py-16
+        xl:px-10
+        2xl:px-12
+      "
+    >
       {/* ========================================
           SECTION HEADER
       ========================================= */}
@@ -28,6 +40,7 @@ export default function FeaturedProducts({
         "
       >
         {/* Heading */}
+
         <div className="min-w-0">
           <p
             className="
@@ -69,12 +82,13 @@ export default function FeaturedProducts({
               sm:leading-6
             "
           >
-            Discover our handpicked products selected for
-            quality, style, and everyday value.
+            Discover our handpicked products selected
+            for quality, style, and everyday value.
           </p>
         </div>
 
         {/* Desktop Product Count */}
+
         <span
           className="
             hidden
@@ -120,7 +134,6 @@ export default function FeaturedProducts({
       ========================================= */}
 
       {products.length === 0 ? (
-        /* Empty State */
         <div
           className="
             flex
@@ -147,7 +160,7 @@ export default function FeaturedProducts({
                 sm:text-lg
               "
             >
-              No products available
+              No featured products yet
             </h3>
 
             <p
@@ -159,8 +172,8 @@ export default function FeaturedProducts({
                 sm:text-sm
               "
             >
-              Products will appear here once they are
-              added.
+              Featured products will appear here when
+              they are selected from the admin panel.
             </p>
           </div>
         </div>
@@ -170,16 +183,12 @@ export default function FeaturedProducts({
             grid
             grid-cols-1
             gap-5
-
             sm:grid-cols-2
             sm:gap-6
-
             lg:grid-cols-3
             lg:gap-6
-
             xl:grid-cols-4
             xl:gap-7
-
             2xl:gap-8
           "
         >

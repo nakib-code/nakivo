@@ -1,172 +1,406 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+// ========================================
+// CART ITEM
+// ========================================
+
 export interface CartItem {
   _id: string;
   title: string;
+
+  // Current checkout price
   price: number;
+
+  // Original product price
+  regularPrice: number;
+
+  // Whether price was taken from active flash sale
+  isFlashSale: boolean;
+
   image: string;
   stock: number;
   quantity: number;
 }
 
+// ========================================
+// PRODUCT TYPE
+// ========================================
+
+export interface CartProduct {
+  _id: string;
+  title: string;
+  price: number;
+  stock: number;
+
+  images?: {
+    url: string;
+    publicId?: string;
+  }[];
+
+  image?: string;
+
+  isFlashSale?: boolean;
+  flashSalePrice?: number;
+  flashSaleStart?: string;
+  flashSaleEnd?: string;
+}
+
+// ========================================
+// CART STATE
+// ========================================
+
 interface CartState {
   cart: CartItem[];
 
-  addToCart: (product: any) => void;
+  addToCart: (product: CartProduct) => void;
+
   removeFromCart: (id: string) => void;
-  updateQuantity: (id: string, quantity: number) => void;
+
+  updateQuantity: (
+    id: string,
+    quantity: number
+  ) => void;
+
   clearCart: () => void;
 
   getTotalPrice: () => number;
+
   getTotalItems: () => number;
+
+  refreshFlashSalePrices: () => void;
 }
 
-export const useCartStore = create<CartState>()(
-  persist(
-    (set, get) => ({
-      cart: [],
+// ========================================
+// CHECK ACTIVE FLASH SALE
+// ========================================
 
-      // =========================
-      // Add To Cart
-      // =========================
+export function isFlashSaleCurrentlyActive(
+  product: CartProduct
+): boolean {
+  if (
+    !product.isFlashSale ||
+    product.flashSalePrice === undefined ||
+    !product.flashSaleStart ||
+    !product.flashSaleEnd
+  ) {
+    return false;
+  }
 
-      addToCart: (product) => {
-        const currentCart = get().cart;
+  const now = Date.now();
 
-        const existingItem = currentCart.find(
-          (item) => item._id === product._id
-        );
+  const start = new Date(
+    product.flashSaleStart
+  ).getTime();
 
-        const stock = Number(product.stock ?? 0);
+  const end = new Date(
+    product.flashSaleEnd
+  ).getTime();
 
-        if (stock <= 0) {
-          return;
-        }
+  const flashPrice = Number(
+    product.flashSalePrice
+  );
 
-        if (existingItem) {
-          // Prevent quantity from exceeding stock
-          if (existingItem.quantity >= stock) {
+  const regularPrice = Number(
+    product.price
+  );
+
+  return (
+    Number.isFinite(start) &&
+    Number.isFinite(end) &&
+    Number.isFinite(flashPrice) &&
+    Number.isFinite(regularPrice) &&
+    now >= start &&
+    now <= end &&
+    flashPrice > 0 &&
+    flashPrice < regularPrice
+  );
+}
+
+// ========================================
+// GET ACTIVE PRODUCT PRICE
+// ========================================
+
+function getProductPrice(
+  product: CartProduct
+) {
+  const regularPrice = Number(
+    product.price
+  );
+
+  const activeFlashSale =
+    isFlashSaleCurrentlyActive(product);
+
+  if (
+    activeFlashSale &&
+    product.flashSalePrice !== undefined
+  ) {
+    return {
+      price: Number(
+        product.flashSalePrice
+      ),
+      isFlashSale: true,
+    };
+  }
+
+  return {
+    price: regularPrice,
+    isFlashSale: false,
+  };
+}
+
+// ========================================
+// STORE
+// ========================================
+
+export const useCartStore =
+  create<CartState>()(
+    persist(
+      (set, get) => ({
+        cart: [],
+
+        // ========================================
+        // ADD TO CART
+        // ========================================
+
+        addToCart: (product) => {
+          const currentCart =
+            get().cart;
+
+          const existingItem =
+            currentCart.find(
+              (item) =>
+                item._id === product._id
+            );
+
+          const stock = Number(
+            product.stock ?? 0
+          );
+
+          // No stock
+          if (stock <= 0) {
+            return;
+          }
+
+          const {
+            price,
+            isFlashSale,
+          } =
+            getProductPrice(product);
+
+          // ========================================
+          // EXISTING ITEM
+          // ========================================
+
+          if (existingItem) {
+            // Prevent quantity > stock
+            if (
+              existingItem.quantity >=
+              stock
+            ) {
+              return;
+            }
+
+            set({
+              cart: currentCart.map(
+                (item) =>
+                  item._id ===
+                  product._id
+                    ? {
+                        ...item,
+
+                        title:
+                          product.title,
+
+                        price,
+
+                        regularPrice:
+                          Number(
+                            product.price
+                          ),
+
+                        isFlashSale,
+
+                        image:
+                          product
+                            .images?.[0]
+                            ?.url ||
+                          product.image ||
+                          item.image,
+
+                        stock,
+
+                        quantity:
+                          item.quantity + 1,
+                      }
+                    : item
+              ),
+            });
+
+            return;
+          }
+
+          // ========================================
+          // NEW ITEM
+          // ========================================
+
+          const newItem: CartItem = {
+            _id: product._id,
+
+            title: product.title,
+
+            price,
+
+            regularPrice:
+              Number(product.price),
+
+            isFlashSale,
+
+            image:
+              product.images?.[0]?.url ||
+              product.image ||
+              "",
+
+            stock,
+
+            quantity: 1,
+          };
+
+          set({
+            cart: [
+              ...currentCart,
+              newItem,
+            ],
+          });
+        },
+
+        // ========================================
+        // REMOVE FROM CART
+        // ========================================
+
+        removeFromCart: (id) => {
+          set({
+            cart: get().cart.filter(
+              (item) =>
+                item._id !== id
+            ),
+          });
+        },
+
+        // ========================================
+        // UPDATE QUANTITY
+        // ========================================
+
+        updateQuantity: (
+          id,
+          quantity
+        ) => {
+          const item =
+            get().cart.find(
+              (item) =>
+                item._id === id
+            );
+
+          if (!item) {
+            return;
+          }
+
+          // Remove item
+          if (quantity <= 0) {
+            get().removeFromCart(id);
+            return;
+          }
+
+          // Prevent exceeding stock
+          if (
+            quantity > item.stock
+          ) {
             return;
           }
 
           set({
-            cart: currentCart.map((item) =>
-              item._id === product._id
-                ? {
-                    ...item,
-                    stock,
-                    quantity: item.quantity + 1,
-                  }
-                : item
+            cart: get().cart.map(
+              (item) =>
+                item._id === id
+                  ? {
+                      ...item,
+                      quantity,
+                    }
+                  : item
             ),
           });
+        },
 
-          return;
-        }
+        // ========================================
+        // REFRESH FLASH SALE PRICES
+        // ========================================
 
-        set({
-          cart: [
-            ...currentCart,
-            {
-              _id: product._id,
-              title: product.title,
-              price: Number(product.price),
-              image:
-                product.images?.[0]?.url ||
-                product.image ||
-                "",
-              stock,
-              quantity: 1,
-            },
-          ],
-        });
-      },
+        refreshFlashSalePrices: () => {
+          set({
+            cart: get().cart.map(
+              (item) => {
+                // If item was flash sale
+                // and sale time has ended,
+                // return to regular price.
+                if (
+                  item.isFlashSale
+                ) {
+                  return {
+                    ...item,
 
-      // =========================
-      // Remove From Cart
-      // =========================
+                    price:
+                      item.regularPrice,
 
-      removeFromCart: (id) => {
-        set({
-          cart: get().cart.filter(
-            (item) => item._id !== id
-          ),
-        });
-      },
-
-      // =========================
-      // Update Quantity
-      // =========================
-
-      updateQuantity: (id, quantity) => {
-        const item = get().cart.find(
-          (item) => item._id === id
-        );
-
-        if (!item) {
-          return;
-        }
-
-        if (quantity <= 0) {
-          get().removeFromCart(id);
-          return;
-        }
-
-        // Never exceed available stock
-        if (quantity > item.stock) {
-          return;
-        }
-
-        set({
-          cart: get().cart.map((item) =>
-            item._id === id
-              ? {
-                  ...item,
-                  quantity,
+                    isFlashSale:
+                      false,
+                  };
                 }
-              : item
-          ),
-        });
-      },
 
-      // =========================
-      // Clear Cart
-      // =========================
+                return item;
+              }
+            ),
+          });
+        },
 
-      clearCart: () => {
-        set({
-          cart: [],
-        });
-      },
+        // ========================================
+        // CLEAR CART
+        // ========================================
 
-      // =========================
-      // Total Price
-      // =========================
+        clearCart: () => {
+          set({
+            cart: [],
+          });
+        },
 
-      getTotalPrice: () => {
-        return get().cart.reduce(
-          (total, item) =>
-            total +
-            item.price * item.quantity,
-          0
-        );
-      },
+        // ========================================
+        // TOTAL PRICE
+        // ========================================
 
-      // =========================
-      // Total Items
-      // =========================
+        getTotalPrice: () => {
+          return get().cart.reduce(
+            (total, item) =>
+              total +
+              item.price *
+                item.quantity,
+            0
+          );
+        },
 
-      getTotalItems: () => {
-        return get().cart.reduce(
-          (total, item) =>
-            total + item.quantity,
-          0
-        );
-      },
-    }),
-    {
-      name: "cart-storage",
-    }
-  )
-);
+        // ========================================
+        // TOTAL ITEMS
+        // ========================================
+
+        getTotalItems: () => {
+          return get().cart.reduce(
+            (total, item) =>
+              total + item.quantity,
+            0
+          );
+        },
+      }),
+
+      {
+        name: "cart-storage",
+      }
+    )
+  );
