@@ -1,5 +1,8 @@
-export interface AdminOrderItem {
+// ==================================================
+// ORDER ITEM
+// ==================================================
 
+export interface OrderItem {
   _id?: string;
 
   product: string;
@@ -11,38 +14,39 @@ export interface AdminOrderItem {
   quantity: number;
 
   image: string;
-
 }
 
-
-
-
+// ==================================================
+// CREATE ORDER ITEM
+// ==================================================
 
 export interface CreateOrderItem {
+  product: string;
 
-  product:string;
-
-  quantity:number;
-
+  quantity: number;
 }
 
-
-
-
+// ==================================================
+// SHIPPING ADDRESS
+// ==================================================
 
 export interface ShippingAddress {
+  address: string;
 
-  address:string;
+  city: string;
 
-  city:string;
-
-  phone:string;
-
+  phone: string;
 }
 
+// ==================================================
+// PAYMENT METHOD
+// ==================================================
 
+export type PaymentMethod = "COD" | "STRIPE";
 
-
+// ==================================================
+// ORDER STATUS
+// ==================================================
 
 export type OrderStatus =
   | "Pending"
@@ -50,78 +54,54 @@ export type OrderStatus =
   | "Delivered"
   | "Cancelled";
 
-
-
-
+// ==================================================
+// CREATE ORDER PAYLOAD
+// ==================================================
 
 export interface CreateOrderPayload {
-
-
   items: CreateOrderItem[];
 
+  shippingAddress: ShippingAddress;
 
-  shippingAddress:ShippingAddress;
-
-
-  paymentMethod:
-  "COD" | "STRIPE";
-
-
+  paymentMethod: PaymentMethod;
 }
 
+// ==================================================
+// ORDER USER
+// ==================================================
 
+export interface OrderUser {
+  _id: string;
 
+  name: string;
 
+  email: string;
 
-export interface AdminOrder {
+  image?: string;
+}
 
+// ==================================================
+// ORDER
+// ==================================================
 
-  _id:string;
+export interface Order {
+  _id: string;
 
+  user?: OrderUser;
 
+  orderItems: OrderItem[];
 
-  user?:{
+  shippingAddress: ShippingAddress;
 
-    _id:string;
+  paymentMethod: PaymentMethod;
 
-    name:string;
+  totalPrice: number;
 
-    email:string;
+  isPaid: boolean;
 
-  };
+  status: OrderStatus;
 
+  createdAt: string;
 
-
-  orderItems:AdminOrderItem[];
-
-
-
-  shippingAddress:ShippingAddress;
-
-
-
-  paymentMethod:
-  "COD" | "STRIPE";
-
-
-
-  totalPrice:number;
-
-
-
-  isPaid:boolean;
-
-
-
-  status:OrderStatus;
-
-
-
-  createdAt:string;
-
-
-
-  updatedAt:string;
-
-
+  updatedAt: string;
 }

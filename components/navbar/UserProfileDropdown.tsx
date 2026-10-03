@@ -23,6 +23,7 @@ import {
   Package,
   User,
 } from "lucide-react";
+import GoogleLoginButton from "./GoogleLoginButton";
 
 export default function UserProfileDropdown() {
   const { data: session, status } = useSession();
@@ -38,13 +39,7 @@ export default function UserProfileDropdown() {
   if (!session?.user) {
     return (
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/login">Login</Link>
-        </Button>
-
-        <Button size="sm" asChild>
-          <Link href="/register">Register</Link>
-        </Button>
+        <GoogleLoginButton />
       </div>
     );
   }

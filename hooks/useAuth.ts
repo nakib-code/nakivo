@@ -33,21 +33,6 @@ export function useLogin() {
   });
 }
 
-// User Register Mutation Hook
-export function useRegister() {
-  return useMutation({
-    mutationFn: async (credentials: RegisterCredentials) => {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(credentials),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message);
-      return json;
-    },
-  });
-}
 
 // Logout Mutation Hook
 export function useLogout() {

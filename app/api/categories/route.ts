@@ -1,8 +1,14 @@
+
+import { NextRequest, NextResponse } from "next/server";
+
 import { requireAdmin } from "@/lib/auth";
 import connectDB from "@/lib/db";
-import { createCategory } from "@/service/category.service";
 import { uploadToCloudinary } from "@/lib/cloudinary";
-import { NextRequest, NextResponse } from "next/server";
+
+import {
+  createCategory,
+  getAllCategories,
+} from "@/service/category/category.service";
 
 // ========================================
 // GET ALL CATEGORIES
@@ -11,10 +17,6 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET() {
   try {
     await connectDB();
-
-    const { getAllCategories } = await import(
-      "@/service/category.service"
-    );
 
     const categories = await getAllCategories();
 
@@ -151,7 +153,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            message: "Category image must be smaller than 5MB",
+            message:
+              "Category image must be smaller than 5MB",
           },
           { status: 400 }
         );

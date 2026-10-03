@@ -5,11 +5,17 @@ import Product from "@/models/Product";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 
 // ========================================
-// GET PRODUCTS
+// CONSTANTS
 // ========================================
+
+const DEFAULT_LIMIT = 12;
+const MAX_LIMIT = 24;
+const MAX_IMAGES = 5;
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 // ========================================
 // GET PRODUCTS
+// Pagination + Search + Filter
 // ========================================
 
 export async function GET(req: NextRequest) {
@@ -18,74 +24,121 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
 
+    // ========================================
+    // Query Parameters
+    // ========================================
+
     const category = searchParams.get("category");
     const search = searchParams.get("search");
     const featured = searchParams.get("featured");
     const flashSale = searchParams.get("flashSale");
+
+    const pageValue = searchParams.get("page");
     const limitValue = searchParams.get("limit");
+
+    // ========================================
+    // Pagination
+    // ========================================
+
+    const page = Math.max(
+      Number(pageValue) || 1,
+      1
+    );
+
+    const requestedLimit =
+      Number(limitValue) || DEFAULT_LIMIT;
+
+    const limit = Math.min(
+      Math.max(requestedLimit, 1),
+      MAX_LIMIT
+    );
+
+    const skip = (page - 1) * limit;
+
+    // ========================================
+    // Build Query
+    // ========================================
 
     const query: Record<string, unknown> = {};
 
-    // ========================================
-    // CATEGORY FILTER
-    // ========================================
-
+    // Category
     if (category) {
       query.category = category;
     }
 
-    // ========================================
-    // SEARCH FILTER
-    // ========================================
-
+    // Search
     if (search) {
+      const escapedSearch = search.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+
       query.title = {
-        $regex: search,
+        $regex: escapedSearch,
         $options: "i",
       };
     }
 
-    // ========================================
-    // FEATURED FILTER
-    // ========================================
-
+    // Featured
     if (featured === "true") {
       query.isFeatured = true;
     }
 
-    // ========================================
-    // FLASH SALE FILTER
-    // ========================================
-
+    // Flash Sale
     if (flashSale === "true") {
       query.isFlashSale = true;
     }
 
     // ========================================
-    // LIMIT
+    // Get Total Count + Products
     // ========================================
 
-    const limit = Number(limitValue);
+    const [total, products] = await Promise.all([
+      Product.countDocuments(query),
 
-    const productsQuery = Product.find(query).sort({
-      createdAt: -1,
-    });
+      Product.find(query)
+        .select(
+          "title description price category stock images ratings isFeatured isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt updatedAt"
+        )
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
 
-    if (
-      Number.isInteger(limit) &&
-      limit > 0
-    ) {
-      productsQuery.limit(limit);
-    }
+    // ========================================
+    // Pagination Information
+    // ========================================
 
-    const products = await productsQuery;
+    const totalPages =
+      Math.ceil(total / limit);
+
+    // ========================================
+    // Response
+    // ========================================
 
     return NextResponse.json(
       {
         success: true,
+
         data: products,
+
+        pagination: {
+          currentPage: page,
+          limit,
+          total,
+          totalPages,
+
+          hasNextPage:
+            page < totalPages,
+
+          hasPreviousPage:
+            page > 1,
+        },
       },
-      { status: 200 }
+      {
+        status: 200,
+      }
     );
   } catch (error) {
     console.error(
@@ -98,10 +151,13 @@ export async function GET(req: NextRequest) {
         success: false,
         message: "Failed to fetch products",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
+
 // ========================================
 // CREATE PRODUCT
 // ========================================
@@ -116,24 +172,31 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
 
-    const title = formData.get("title")?.toString().trim();
+    const title = formData
+      .get("title")
+      ?.toString()
+      .trim();
 
     const description = formData
       .get("description")
       ?.toString()
       .trim();
 
-    const priceValue = formData.get("price")?.toString();
+    const priceValue = formData
+      .get("price")
+      ?.toString();
 
     const category = formData
       .get("category")
       ?.toString()
       .trim();
 
-    const stockValue = formData.get("stock")?.toString();
+    const stockValue = formData
+      .get("stock")
+      ?.toString();
 
     // ========================================
-    // Validate Basic Fields
+    // Validate Required Fields
     // ========================================
 
     if (!title) {
@@ -150,7 +213,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message: "Product description is required",
+          message:
+            "Product description is required",
         },
         { status: 400 }
       );
@@ -160,7 +224,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message: "Product price is required",
+          message:
+            "Product price is required",
         },
         { status: 400 }
       );
@@ -170,7 +235,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message: "Product category is required",
+          message:
+            "Product category is required",
         },
         { status: 400 }
       );
@@ -180,20 +246,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message: "Product stock is required",
+          message:
+            "Product stock is required",
         },
         { status: 400 }
       );
     }
 
     // ========================================
-    // Convert Number Values
+    // Convert Numbers
     // ========================================
 
     const price = Number(priceValue);
     const stock = Number(stockValue);
 
-    if (!Number.isFinite(price) || price < 0) {
+    if (
+      !Number.isFinite(price) ||
+      price < 0
+    ) {
       return NextResponse.json(
         {
           success: false,
@@ -203,7 +273,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!Number.isInteger(stock) || stock < 0) {
+    if (
+      !Number.isInteger(stock) ||
+      stock < 0
+    ) {
       return NextResponse.json(
         {
           success: false,
@@ -217,11 +290,13 @@ export async function POST(req: NextRequest) {
     // Get Images
     // ========================================
 
-    const imageEntries = formData.getAll("images");
+    const imageEntries =
+      formData.getAll("images");
 
     const imageFiles = imageEntries.filter(
       (item): item is File =>
-        item instanceof File && item.size > 0
+        item instanceof File &&
+        item.size > 0
     );
 
     // ========================================
@@ -232,17 +307,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message: "At least one product image is required",
+          message:
+            "At least one product image is required",
         },
         { status: 400 }
       );
     }
 
-    if (imageFiles.length > 5) {
+    if (imageFiles.length > MAX_IMAGES) {
       return NextResponse.json(
         {
           success: false,
-          message: "Maximum 5 images are allowed",
+          message:
+            `Maximum ${MAX_IMAGES} images are allowed`,
         },
         { status: 400 }
       );
@@ -257,17 +334,19 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            message: `${file.name} is not a valid image`,
+            message:
+              `${file.name} is not a valid image`,
           },
           { status: 400 }
         );
       }
 
-      if (file.size > 5 * 1024 * 1024) {
+      if (file.size > MAX_FILE_SIZE) {
         return NextResponse.json(
           {
             success: false,
-            message: `${file.name} is larger than 5MB`,
+            message:
+              `${file.name} is larger than 5MB`,
           },
           { status: 400 }
         );
@@ -275,7 +354,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ========================================
-    // Upload Images To Cloudinary
+    // Upload Images to Cloudinary
     // ========================================
 
     let uploadedImages;
@@ -308,28 +387,15 @@ export async function POST(req: NextRequest) {
     }
 
     // ========================================
-    // IMPORTANT
-    //
-    // Product model expects:
-    //
-    // images: [
-    //   {
-    //     url: "...",
-    //     publicId: "..."
-    //   }
-    // ]
-    //
-    // NOT:
-    //
-    // images: [
-    //   "https://..."
-    // ]
+    // Prepare Images
     // ========================================
 
-    const images = uploadedImages.map((image) => ({
-      url: image.secure_url,
-      publicId: image.public_id,
-    }));
+    const images = uploadedImages.map(
+      (image) => ({
+        url: image.secure_url,
+        publicId: image.public_id,
+      })
+    );
 
     // ========================================
     // Create Product
@@ -352,10 +418,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        message: "Product created successfully",
+        message:
+          "Product created successfully",
         data: product,
       },
-      { status: 201 }
+      {
+        status: 201,
+      }
     );
   } catch (error) {
     console.error(
@@ -371,7 +440,9 @@ export async function POST(req: NextRequest) {
             ? error.message
             : "Failed to create product",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }

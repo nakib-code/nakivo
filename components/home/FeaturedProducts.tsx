@@ -1,4 +1,5 @@
 import ProductCard from "@/components/products/ProductCard";
+
 import { IProduct } from "@/types";
 
 interface Props {
@@ -15,42 +16,41 @@ export default function FeaturedProducts({
         mx-auto
         w-full
         max-w-[1600px]
-        px-4
-        py-10
+        px-3
+        py-b
         sm:px-6
-        sm:py-12
+        sm:pb-12
         lg:px-8
-        lg:py-16
+        lg:pb-16
         xl:px-10
         2xl:px-12
       "
     >
-      {/* ========================================
-          SECTION HEADER
-      ========================================= */}
-
+      {/* ================= SECTION HEADER ================= */}
       <div
         className="
           flex
           flex-col
-          gap-4
+          gap-3
           sm:flex-row
           sm:items-end
           sm:justify-between
+          sm:gap-4
         "
       >
         {/* Heading */}
-
         <div className="min-w-0">
           <p
             className="
-              mb-2
-              text-[10px]
+              mb-1.5
+              text-[9px]
               font-bold
               uppercase
-              tracking-[0.2em]
+              tracking-[0.18em]
               text-slate-400
+              sm:mb-2
               sm:text-xs
+              sm:tracking-[0.2em]
             "
           >
             Our Collection
@@ -63,7 +63,6 @@ export default function FeaturedProducts({
               leading-tight
               tracking-tight
               text-slate-950
-              xs:text-3xl
               sm:text-3xl
               md:text-4xl
             "
@@ -73,11 +72,12 @@ export default function FeaturedProducts({
 
           <p
             className="
-              my-3
+              my-2
               max-w-xl
-              text-xs
-              leading-5
+              text-[11px]
+              leading-4
               text-slate-500
+              sm:my-3
               sm:text-sm
               sm:leading-6
             "
@@ -88,7 +88,6 @@ export default function FeaturedProducts({
         </div>
 
         {/* Desktop Product Count */}
-
         <span
           className="
             hidden
@@ -108,11 +107,8 @@ export default function FeaturedProducts({
         </span>
       </div>
 
-      {/* ========================================
-          MOBILE PRODUCT COUNT
-      ========================================= */}
-
-      <div className="sm:hidden">
+      {/* ================= MOBILE PRODUCT COUNT ================= */}
+      <div className="mb-4 sm:hidden">
         <span
           className="
             inline-flex
@@ -120,7 +116,7 @@ export default function FeaturedProducts({
             bg-slate-100
             px-3
             py-1.5
-            text-xs
+            text-[11px]
             font-semibold
             text-slate-600
           "
@@ -129,15 +125,12 @@ export default function FeaturedProducts({
         </span>
       </div>
 
-      {/* ========================================
-          PRODUCTS
-      ========================================= */}
-
+      {/* ================= PRODUCTS ================= */}
       {products.length === 0 ? (
         <div
           className="
             flex
-            min-h-[260px]
+            min-h-[220px]
             w-full
             items-center
             justify-center
@@ -146,9 +139,10 @@ export default function FeaturedProducts({
             border-dashed
             border-slate-300
             bg-slate-50
-            px-5
+            px-4
             sm:min-h-[300px]
             sm:rounded-3xl
+            sm:px-5
           "
         >
           <div className="max-w-sm text-center">
@@ -165,10 +159,11 @@ export default function FeaturedProducts({
 
             <p
               className="
-                mt-2
-                text-xs
+                mt-1.5
+                text-[11px]
                 leading-5
                 text-slate-500
+                sm:mt-2
                 sm:text-sm
               "
             >
@@ -181,10 +176,10 @@ export default function FeaturedProducts({
         <div
           className="
             grid
-            grid-cols-1
-            gap-5
+            grid-cols-2
+            gap-3
             sm:grid-cols-2
-            sm:gap-6
+            sm:gap-5
             lg:grid-cols-3
             lg:gap-6
             xl:grid-cols-4

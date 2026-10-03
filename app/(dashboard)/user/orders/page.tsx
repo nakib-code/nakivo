@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
+
 import {
   CalendarDays,
   Package,
   ShoppingBag,
+  ArrowRight,
 } from "lucide-react";
 
 import { useOrders } from "@/hooks/useOrders";
+
 import { Button } from "@/components/ui/button";
 
 export default function UserOrdersPage() {
@@ -17,23 +20,26 @@ export default function UserOrdersPage() {
     isError,
   } = useOrders();
 
-  // =========================
+  // ==================================================
   // Loading
-  // =========================
+  // ==================================================
 
   if (isLoading) {
     return (
       <div className="space-y-6">
+        {/* Header Skeleton */}
         <div>
           <div className="h-8 w-40 animate-pulse rounded bg-muted" />
+
           <div className="mt-2 h-4 w-64 animate-pulse rounded bg-muted" />
         </div>
 
+        {/* Order Skeletons */}
         <div className="space-y-4">
           {[1, 2, 3].map((item) => (
             <div
               key={item}
-              className="h-40 animate-pulse rounded-2xl border bg-muted/40"
+              className="h-52 animate-pulse rounded-2xl border bg-muted/40"
             />
           ))}
         </div>
@@ -41,9 +47,9 @@ export default function UserOrdersPage() {
     );
   }
 
-  // =========================
+  // ==================================================
   // Error
-  // =========================
+  // ==================================================
 
   if (isError) {
     return (
@@ -55,32 +61,49 @@ export default function UserOrdersPage() {
         <p className="mt-1 text-sm text-red-500">
           Please try again later.
         </p>
+
+        <Button
+          asChild
+          variant="outline"
+          className="mt-5"
+        >
+          <Link href="/products">
+            Continue Shopping
+          </Link>
+        </Button>
       </div>
     );
   }
 
-  // =========================
+  // ==================================================
   // Empty
-  // =========================
+  // ==================================================
 
   if (orders.length === 0) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="max-w-md text-center">
+          {/* Icon */}
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted">
             <ShoppingBag className="h-8 w-8 text-muted-foreground" />
           </div>
 
+          {/* Title */}
           <h1 className="mt-5 text-2xl font-bold">
             No Orders Yet
           </h1>
 
+          {/* Description */}
           <p className="mt-2 text-sm text-muted-foreground">
-            You haven't placed any orders yet.
+            You haven&apos;t placed any orders yet.
             Start shopping to see your orders here.
           </p>
 
-          <Button asChild className="mt-6">
+          {/* Button */}
+          <Button
+            asChild
+            className="mt-6"
+          >
             <Link href="/products">
               Start Shopping
             </Link>
@@ -90,13 +113,15 @@ export default function UserOrdersPage() {
     );
   }
 
-  // =========================
+  // ==================================================
   // Orders
-  // =========================
+  // ==================================================
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* ==================================================
+          Header
+      ================================================== */}
 
       <div>
         <h1 className="text-2xl font-bold tracking-tight">
@@ -108,22 +133,31 @@ export default function UserOrdersPage() {
         </p>
       </div>
 
-      {/* Order List */}
+      {/* ==================================================
+          Order List
+      ================================================== */}
 
       <div className="space-y-4">
-        {orders.map((order: any) => {
+        {orders.map((order) => {
           const orderDate = new Date(
             order.createdAt
-          ).toLocaleDateString();
+          ).toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          });
 
           return (
             <div
               key={order._id}
               className="overflow-hidden rounded-2xl border bg-white"
             >
-              {/* Order Header */}
+              {/* ==================================================
+                  Order Header
+              ================================================== */}
 
               <div className="flex flex-col gap-3 border-b bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                {/* Order Info */}
                 <div>
                   <p className="text-sm font-semibold">
                     Order #{order._id.slice(-8)}
@@ -131,29 +165,29 @@ export default function UserOrdersPage() {
 
                   <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                     <CalendarDays className="h-3.5 w-3.5" />
-                    {orderDate}
+
+                    <span>{orderDate}</span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  {/* Status */}
-
+                {/* Status */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Order Status */}
                   <span
                     className={`rounded-full px-3 py-1 text-xs font-semibold ${
                       order.status === "Delivered"
                         ? "bg-green-100 text-green-700"
                         : order.status === "Cancelled"
-                        ? "bg-red-100 text-red-700"
-                        : order.status === "Processing"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-yellow-100 text-yellow-700"
+                          ? "bg-red-100 text-red-700"
+                          : order.status === "Processing"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-yellow-100 text-yellow-700"
                     }`}
                   >
                     {order.status}
                   </span>
 
-                  {/* Payment */}
-
+                  {/* Payment Status */}
                   <span
                     className={`rounded-full px-3 py-1 text-xs font-semibold ${
                       order.isPaid
@@ -168,24 +202,24 @@ export default function UserOrdersPage() {
                 </div>
               </div>
 
-              {/* Order Content */}
+              {/* ==================================================
+                  Order Content
+              ================================================== */}
 
               <div className="space-y-4 p-4">
-                {order.orderItems?.map(
-                  (item: any) => {
-                    const image =
-                      item.image ||
-                      item.product?.images?.[0]
-                        ?.url ||
-                      "";
+                {order.orderItems.map(
+                  (item, index) => {
+                    const image = item.image || "";
 
                     return (
                       <div
-                        key={`${order._id}-${item.product?._id || item.product}`}
+                        key={
+                          item._id ||
+                          `${order._id}-${item.product}-${index}`
+                        }
                         className="flex items-center gap-4"
                       >
-                        {/* Image */}
-
+                        {/* Product Image */}
                         <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100">
                           {image ? (
                             <img
@@ -200,8 +234,7 @@ export default function UserOrdersPage() {
                           )}
                         </div>
 
-                        {/* Details */}
-
+                        {/* Product Details */}
                         <div className="min-w-0 flex-1">
                           <p className="line-clamp-1 font-semibold">
                             {item.title}
@@ -210,11 +243,15 @@ export default function UserOrdersPage() {
                           <p className="mt-1 text-xs text-muted-foreground">
                             Qty: {item.quantity}
                           </p>
+
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Price: $
+                            {item.price.toFixed(2)}
+                          </p>
                         </div>
 
-                        {/* Price */}
-
-                        <p className="text-sm font-bold">
+                        {/* Item Total */}
+                        <p className="shrink-0 text-sm font-bold">
                           $
                           {(
                             item.price *
@@ -227,9 +264,12 @@ export default function UserOrdersPage() {
                 )}
               </div>
 
-              {/* Footer */}
+              {/* ==================================================
+                  Order Footer
+              ================================================== */}
 
-              <div className="flex flex-col gap-3 border-t p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-4 border-t p-4 sm:flex-row sm:items-center sm:justify-between">
+                {/* Payment Method */}
                 <div className="text-sm">
                   <span className="text-muted-foreground">
                     Payment:
@@ -239,14 +279,32 @@ export default function UserOrdersPage() {
                   </span>
                 </div>
 
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">
-                    Total
-                  </p>
+                {/* Total + Details */}
+                <div className="flex items-center justify-between gap-5 sm:justify-end">
+                  {/* Total */}
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">
+                      Total
+                    </p>
 
-                  <p className="text-lg font-bold">
-                    ${order.totalPrice.toFixed(2)}
-                  </p>
+                    <p className="text-lg font-bold">
+                      ${order.totalPrice.toFixed(2)}
+                    </p>
+                  </div>
+
+                  {/* Details Button */}
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Link
+                      href={`/dashboard/orders/${order._id}`}
+                    >
+                      View Details
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
                 </div>
               </div>
             </div>

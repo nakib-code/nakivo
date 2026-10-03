@@ -81,69 +81,6 @@ export default function LoginForm() {
         <div className="my-6">
           <AuthDivider text="or continue with email" />
         </div>
-
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          className="space-y-5"
-        >
-          {/* Email */}
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Email Address
-            </label>
-
-            <Input
-              type="email"
-              placeholder="john@example.com"
-              autoComplete="email"
-              {...register("email")}
-            />
-
-            {errors.email && (
-              <p className="text-sm text-red-500">
-                {errors.email.message}
-              </p>
-            )}
-          </div>
-
-          {/* Password */}
-
-          <PasswordInput
-            control={control}
-            name="password"
-            label="Password"
-            placeholder="Enter your password"
-          />
-
-          <div className="flex justify-end">
-            <Link
-              href="/forgot-password"
-              className="text-sm text-muted-foreground hover:text-primary"
-            >
-              Forgot password?
-            </Link>
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={isPending}
-          >
-            {isPending ? "Signing In..." : "Sign In"}
-          </Button>
-        </form>
-
-        <div className="mt-6 text-center text-sm text-muted-foreground">
-          Don't have an account?{" "}
-          <Link
-            href="/signup"
-            className="font-medium text-primary hover:underline"
-          >
-            Create Account
-          </Link>
-        </div>
-
       </div>
     </div>
   );

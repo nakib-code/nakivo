@@ -1,3 +1,4 @@
+import Categories from "@/components/home/Categories";
 import FeaturedProducts from "@/components/home/FeaturedProducts";
 import FlashSale from "@/components/home/FlashSale";
 import Hero from "@/components/home/hero/Hero";
@@ -20,7 +21,7 @@ export default async function HomePage() {
   return (
     <main className="space-y-20">
       <Hero />
-
+      <Categories />
       <FeaturedProducts
         products={featuredProducts}
       />

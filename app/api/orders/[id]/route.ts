@@ -19,6 +19,130 @@ const allowedStatuses = [
 
 type OrderStatus = (typeof allowedStatuses)[number];
 
+// ==================================================
+// GET SINGLE ORDER
+// ==================================================
+
+export async function GET(
+  _req: NextRequest,
+  { params }: RouteParams
+) {
+  try {
+    // ========================================
+    // Authentication
+    // ========================================
+
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Authentication required",
+        },
+        { status: 401 }
+      );
+    }
+
+    // ========================================
+    // Database
+    // ========================================
+
+    await connectDB();
+
+    // ========================================
+    // Params
+    // ========================================
+
+    const { id } = await params;
+
+    if (!id) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Order ID is required",
+        },
+        { status: 400 }
+      );
+    }
+
+    // ========================================
+    // Find Order
+    // ========================================
+
+    const order = await Order.findById(id)
+      .populate(
+        "user",
+        "name email image"
+      )
+      .populate(
+        "orderItems.product",
+        "title price images isFlashSale flashSalePrice flashSaleStart flashSaleEnd"
+      );
+
+    if (!order) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Order not found",
+        },
+        { status: 404 }
+      );
+    }
+
+    // ========================================
+    // Authorization
+    // Admin → Can see any order
+    // Customer → Can see only own order
+    // ========================================
+
+    if (
+      user.role !== "admin" &&
+      order.user._id.toString() !== user.id.toString()
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You are not authorized to view this order",
+        },
+        { status: 403 }
+      );
+    }
+
+    // ========================================
+    // Response
+    // ========================================
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: order,
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error(
+      "GET Single Order Error:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch order",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// ==================================================
+// UPDATE ORDER STATUS
+// ==================================================
+
 export async function PATCH(
   req: NextRequest,
   { params }: RouteParams
@@ -81,7 +205,6 @@ export async function PATCH(
     // ========================================
 
     const body = await req.json();
-
     const status = body.status as string;
 
     // ========================================
@@ -133,8 +256,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         success: true,
-        message:
-          "Order status updated successfully",
+        message: "Order status updated successfully",
         data: order,
       },
       { status: 200 }

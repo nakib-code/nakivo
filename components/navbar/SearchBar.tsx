@@ -49,7 +49,7 @@ export default function SearchBar({
         type="submit"
         className="absolute right-1 top-1 flex h-9 w-9 items-center justify-center rounded-full bg-black text-white transition hover:bg-slate-800"
       >
-        <Search className="h-4 w-4" />
+        
       </button>
     </form>
   );

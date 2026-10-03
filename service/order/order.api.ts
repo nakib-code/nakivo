@@ -1,81 +1,99 @@
-import { api } from "@/lib/api";
-
 import type {
-  AdminOrder,
   CreateOrderPayload,
 } from "@/types/order";
 
+// ==================================================
+// GET ORDERS
+// ==================================================
 
-
-
-// ========================================
-// Create Order Response
-// ========================================
-
-export interface CreateOrderResponse {
-
-  success: boolean;
-
-  message: string;
-
-  data: {
-    _id: string;
-  };
-
-}
-
-
-
-
-
-// ========================================
-// Get Admin Orders
-// ========================================
-
-export const getAdminOrders = () => {
-
-
-  return api<AdminOrder[]>(
-    "/api/admin/orders"
-  );
-
-
-};
-
-
-
-
-
-
-// ========================================
-// Create Order
-// ========================================
-
-export const createOrder = (
-  payload: CreateOrderPayload
-) => {
-
-
-  return api<CreateOrderResponse>(
+export async function getOrders() {
+  const response = await fetch(
     "/api/orders",
     {
+      method: "GET",
 
-      method:"POST",
-
-
-      headers:{
-        "Content-Type":
-        "application/json",
+      headers: {
+        "Content-Type": "application/json",
       },
 
-
-      body:JSON.stringify(
-        payload
-      ),
-
-
+      credentials: "include",
     }
   );
 
+  const result = await response.json();
 
-};
+  if (!response.ok) {
+    throw new Error(
+      result.message ||
+        "Failed to fetch orders"
+    );
+  }
+
+  return result.data;
+}
+
+// ==================================================
+// CREATE ORDER
+// ==================================================
+
+export async function createOrder(
+  payload: CreateOrderPayload
+) {
+  const response = await fetch(
+    "/api/orders",
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json",
+      },
+
+      credentials: "include",
+
+      body: JSON.stringify(payload),
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.message ||
+        "Failed to create order"
+    );
+  }
+
+  return result;
+}
+
+// ==================================================
+// GET SINGLE ORDER
+// ==================================================
+
+export async function getOrderById(
+  id: string
+) {
+  const response = await fetch(
+    `/api/orders/${id}`,
+    {
+      method: "GET",
+
+      headers: {
+        "Content-Type": "application/json",
+      },
+
+      credentials: "include",
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.message ||
+        "Failed to fetch order"
+    );
+  }
+
+  return result.data;
+}

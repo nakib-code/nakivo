@@ -1,137 +1,40 @@
-import Category from "@/models/Category";
-import {
-  CreateCategoryValues,
-  UpdateCategoryValues,
-} from "@/lib/validations/category";
-
-function createSlug(name: string) {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
+export interface ICategory {
+  _id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  image?: string;
 }
 
-export async function createCategory(data: CreateCategoryValues) {
-  const slug = createSlug(data.name);
-
-  const existingCategory = await Category.findOne({
-    $or: [
-      { name: data.name.trim() },
-      { slug },
-    ],
-  });
-
-  if (existingCategory) {
-    throw new Error("Category already exists");
+function getBaseUrl() {
+  if (typeof window !== "undefined") {
+    return "";
   }
 
-  const category = await Category.create({
-    name: data.name.trim(),
-    slug,
-    description: data.description?.trim() || "",
-    image: data.image || "",
-  });
-
-  return category;
+  return (
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    "http://localhost:3000"
+  );
 }
 
-export async function getAllCategories() {
-  return Category.find().sort({ createdAt: -1 });
-}
+export async function getCategories(): Promise<ICategory[]> {
+  const baseUrl = getBaseUrl();
 
-export async function getCategoryById(id: string) {
-  const category = await Category.findById(id);
-
-  if (!category) {
-    throw new Error("Category not found");
-  }
-
-  return category;
-}
-
-export async function updateCategory(
-  id: string,
-  data: UpdateCategoryValues
-) {
-  const category = await Category.findById(id);
-
-  if (!category) {
-    throw new Error("Category not found");
-  }
-
-  if (data.name) {
-    const slug = createSlug(data.name);
-
-    const existingCategory = await Category.findOne({
-      $or: [
-        { name: data.name.trim() },
-        { slug },
-      ],
-      _id: { $ne: id },
-    });
-
-    if (existingCategory) {
-      throw new Error("Category name already exists");
+  const res = await fetch(
+    `${baseUrl}/api/categories`,
+    {
+      method: "GET",
+      cache: "no-store",
     }
+  );
 
-    category.name = data.name.trim();
-    category.slug = slug;
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(
+      data.message || "Failed to fetch categories"
+    );
   }
 
-  if (data.description !== undefined) {
-    category.description = data.description.trim();
-  }
-
-  if (data.image !== undefined) {
-    category.image = data.image;
-  }
-
-  await category.save();
-
-  return category;
-}
-
-export async function deleteCategory(id: string) {
-  const category = await Category.findById(id);
-
-  if (!category) {
-    throw new Error("Category not found");
-  }
-
-  await Category.findByIdAndDelete(id);
-
-  return category;
-}
-
-
-export async function getCategories(){
-
- const res = await fetch(
-   "/api/categories"
- );
-
-
- const json = await res.json();
-
-
- console.log(
-   "API RESPONSE:",
-   json
- );
-
-
- if(!res.ok){
-
-   throw new Error(
-    json.message || 
-    "Failed to fetch categories"
-   );
-
- }
-
-
- return json.data;
-
+  return Array.isArray(data.data) ? data.data : [];
 }
