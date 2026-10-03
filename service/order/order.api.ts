@@ -33,6 +33,36 @@ export async function getOrders() {
 }
 
 // ==================================================
+// GET ADMIN ORDERS
+// ==================================================
+
+export async function getAdminOrders() {
+  const response = await fetch(
+    "/api/orders",
+    {
+      method: "GET",
+
+      headers: {
+        "Content-Type": "application/json",
+      },
+
+      credentials: "include",
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      result.message ||
+        "Failed to fetch admin orders"
+    );
+  }
+
+  return result.data;
+}
+
+// ==================================================
 // CREATE ORDER
 // ==================================================
 
