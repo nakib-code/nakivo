@@ -8,7 +8,6 @@ import HeroDots from "./HeroDots";
 import HeroArrow from "./HeroArrow";
 import HeroSlide from "./HeroSlide";
 
-
 interface Props {
   banners: HeroBanner[];
 }
@@ -25,7 +24,7 @@ export default function HeroCarousel({ banners }: Props) {
       loop: true,
       align: "start",
     },
-    [autoplay]
+    [autoplay],
   );
 
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -42,7 +41,7 @@ export default function HeroCarousel({ banners }: Props) {
     (index: number) => {
       emblaApi?.scrollTo(index);
     },
-    [emblaApi]
+    [emblaApi],
   );
 
   useEffect(() => {
@@ -65,31 +64,21 @@ export default function HeroCarousel({ banners }: Props) {
 
   return (
     <div className="relative">
-
       {/* Slider */}
       <div className="overflow-hidden" ref={emblaRef}>
         <div className="flex">
-          {banners.map((banner) => (
-            <div
-              key={banner._id}
-              className="min-w-0 flex-[0_0_100%]"
-            >
-              <HeroSlide banner={banner} />
+          {banners.map((banner, index) => (
+            <div key={banner._id} className="min-w-0 flex-[0_0_100%]">
+              <HeroSlide banner={banner} priority={index === 0} />
             </div>
           ))}
         </div>
       </div>
 
       {/* Navigation */}
-      <HeroArrow
-        direction="left"
-        onClick={scrollPrev}
-      />
+      <HeroArrow direction="left" onClick={scrollPrev} />
 
-      <HeroArrow
-        direction="right"
-        onClick={scrollNext}
-      />
+      <HeroArrow direction="right" onClick={scrollNext} />
 
       {/* Dots */}
       <HeroDots

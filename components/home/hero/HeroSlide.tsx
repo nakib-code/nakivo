@@ -9,9 +9,10 @@ import { HeroBanner } from "@/types/hero.types";
 
 interface Props {
   banner: HeroBanner;
+  priority?: boolean;
 }
 
-export default function HeroSlide({ banner }: Props) {
+export default function HeroSlide({ banner, priority = false }: Props) {
   return (
     <section
       className="
@@ -27,11 +28,10 @@ export default function HeroSlide({ banner }: Props) {
         src={banner.image}
         alt={banner.title}
         fill
-        priority
-        className="object-cover"
+        priority={priority}
         sizes="100vw"
+        className="object-cover"
       />
-
       {/* ================= OVERLAY ================= */}
       <div
         className="
@@ -92,10 +92,7 @@ export default function HeroSlide({ banner }: Props) {
                 sm:py-2
               "
             >
-              <Tag
-                size={11}
-                className="sm:h-[15px] sm:w-[15px]"
-              />
+              <Tag size={11} className="sm:h-[15px] sm:w-[15px]" />
 
               <span
                 className="

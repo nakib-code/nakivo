@@ -1,29 +1,12 @@
-"use client";
 
 import HeroCarousel from "./HeroCarousel";
-import { useHeroBanners } from "@/hooks/useHeroBanners";
+import type { HeroBanner } from "@/types/hero.types";
 
-export default function Hero() {
-  const {
-    data: banners = [],
-    isLoading,
-  } = useHeroBanners();
+interface Props {
+  banners: HeroBanner[];
+}
 
-  if (isLoading) {
-    return (
-      <section
-        className="
-          h-[300px]
-          w-full
-          animate-pulse
-          bg-slate-200
-          sm:h-[400px]
-          md:h-[600px]
-        "
-      />
-    );
-  }
-
+export default function Hero({ banners }: Props) {
   if (banners.length === 0) {
     return null;
   }
@@ -42,4 +25,4 @@ export default function Hero() {
       <HeroCarousel banners={banners} />
     </section>
   );
-};
+}
