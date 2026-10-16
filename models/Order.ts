@@ -3,10 +3,7 @@ import { IOrder } from "@/types";
 
 const OrderSchema: Schema<IOrder> = new Schema(
   {
-    // ========================================
     // Customer
-    // ========================================
-
     user: {
       type: Schema.Types.ObjectId,
       ref: "User",
@@ -14,10 +11,7 @@ const OrderSchema: Schema<IOrder> = new Schema(
       index: true,
     },
 
-    // ========================================
     // Order Items
-    // ========================================
-
     orderItems: [
       {
         title: {
@@ -25,24 +19,20 @@ const OrderSchema: Schema<IOrder> = new Schema(
           required: true,
           trim: true,
         },
-
         quantity: {
           type: Number,
           required: true,
           min: 1,
         },
-
         image: {
           type: String,
           default: "",
         },
-
         price: {
           type: Number,
           required: true,
           min: 0,
         },
-
         product: {
           type: Schema.Types.ObjectId,
           ref: "Product",
@@ -51,39 +41,49 @@ const OrderSchema: Schema<IOrder> = new Schema(
       },
     ],
 
-    // ========================================
     // Shipping Address
-    // ========================================
-
     shippingAddress: {
       address: {
         type: String,
         required: true,
         trim: true,
       },
-
       city: {
         type: String,
         required: true,
         trim: true,
       },
-
       phone: {
         type: String,
         required: true,
         trim: true,
       },
+      deliveryArea: {
+        type: String,
+        enum: ["INSIDE_DHAKA", "OUTSIDE_DHAKA"],
+        required: false,
+      },
     },
 
-    // ========================================
     // Payment
-    // ========================================
-
     paymentMethod: {
       type: String,
       required: true,
       default: "COD",
-      enum: ["COD", "STRIPE"],
+      enum: ["COD"],
+    },
+
+    subtotal: {
+      type: Number,
+      required: false,
+      min: 0,
+    },
+
+    deliveryCharge: {
+      type: Number,
+      required: false,
+      min: 0,
+      default: 0,
     },
 
     totalPrice: {
@@ -99,10 +99,7 @@ const OrderSchema: Schema<IOrder> = new Schema(
       default: false,
     },
 
-    // ========================================
     // Order Status
-    // ========================================
-
     status: {
       type: String,
       enum: [

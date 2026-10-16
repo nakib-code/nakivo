@@ -4,15 +4,10 @@
 
 export interface OrderItem {
   _id?: string;
-
   product: string;
-
   title: string;
-
   price: number;
-
   quantity: number;
-
   image: string;
 }
 
@@ -22,9 +17,14 @@ export interface OrderItem {
 
 export interface CreateOrderItem {
   product: string;
-
   quantity: number;
 }
+
+// ==================================================
+// DELIVERY AREA
+// ==================================================
+
+export type DeliveryArea = "INSIDE_DHAKA" | "OUTSIDE_DHAKA";
 
 // ==================================================
 // SHIPPING ADDRESS
@@ -32,17 +32,16 @@ export interface CreateOrderItem {
 
 export interface ShippingAddress {
   address: string;
-
   city: string;
-
   phone: string;
+  deliveryArea?: DeliveryArea;
 }
 
 // ==================================================
 // PAYMENT METHOD
 // ==================================================
 
-export type PaymentMethod = "COD" | "STRIPE";
+export type PaymentMethod = "COD";
 
 // ==================================================
 // ORDER STATUS
@@ -60,9 +59,7 @@ export type OrderStatus =
 
 export interface CreateOrderPayload {
   items: CreateOrderItem[];
-
   shippingAddress: ShippingAddress;
-
   paymentMethod: PaymentMethod;
 }
 
@@ -72,11 +69,8 @@ export interface CreateOrderPayload {
 
 export interface OrderUser {
   _id: string;
-
   name: string;
-
   email: string;
-
   image?: string;
 }
 
@@ -86,22 +80,15 @@ export interface OrderUser {
 
 export interface Order {
   _id: string;
-
   user?: OrderUser;
-
   orderItems: OrderItem[];
-
   shippingAddress: ShippingAddress;
-
   paymentMethod: PaymentMethod;
-
+  subtotal?: number;
+  deliveryCharge?: number;
   totalPrice: number;
-
   isPaid: boolean;
-
   status: OrderStatus;
-
   createdAt: string;
-
   updatedAt: string;
 }

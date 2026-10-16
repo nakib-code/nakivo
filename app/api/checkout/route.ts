@@ -1,28 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
 
 import connectDB from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import Order from "@/models/Order";
 
 // ==================================================
-// Stripe
-// ==================================================
-
-const stripe = new Stripe(
-  process.env.STRIPE_SECRET_KEY as string
-);
-
-// ==================================================
-// Create Stripe Checkout Session
+// CHECKOUT API — COD ONLY
 // ==================================================
 
 export async function POST(req: NextRequest) {
   try {
-    // ========================================
     // Authentication
-    // ========================================
-
     const user = await getCurrentUser();
 
     if (!user) {
@@ -35,19 +23,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ========================================
     // Database
-    // ========================================
-
     await connectDB();
 
-    // ========================================
-    // Request Body
-    // ========================================
-
+    // Request body
     const body = await req.json();
-
-    const { orderId } = body;
+    const { orderId, paymentMethod } = body;
 
     if (!orderId) {
       return NextResponse.json(
@@ -59,10 +40,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ========================================
-    // Find Order
-    // ========================================
+    // Reject Stripe and any unsupported payment method
+    if (paymentMethod && paymentMethod !== "COD") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Only Cash on Delivery is supported",
+        },
+        { status: 400 }
+      );
+    }
 
+    // Find order
     const order = await Order.findById(orderId);
 
     if (!order) {
@@ -75,137 +64,60 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ========================================
-    // Check Order Ownership
-    // ========================================
-
-    if (
-      order.user.toString() !== user.id.toString()
-    ) {
+    // Check order ownership
+    if (order.user.toString() !== user.id.toString()) {
       return NextResponse.json(
         {
           success: false,
-          message: "You are not allowed to pay for this order",
+          message: "You are not allowed to access this order",
         },
         { status: 403 }
       );
     }
 
-    // ========================================
-    // Check Payment Method
-    // ========================================
-
-    if (order.paymentMethod !== "STRIPE") {
+    // This endpoint does not process online payments
+    if (order.paymentMethod !== "COD") {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "This order does not require Stripe payment",
+          message: "This order is not configured for Cash on Delivery",
         },
         { status: 400 }
       );
     }
 
-    // ========================================
-    // Check Already Paid
-    // ========================================
-
-    if (order.isPaid) {
+    // Reject cancelled orders
+    if (order.status === "Cancelled") {
       return NextResponse.json(
         {
           success: false,
-          message: "This order has already been paid",
+          message: "Cancelled orders cannot be checked out",
         },
         { status: 400 }
       );
     }
 
-    // ========================================
-    // Create Stripe Line Items
-    // ========================================
-
-    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] =
-      order.orderItems.map((item) => ({
-        price_data: {
-          currency: "usd",
-
-          product_data: {
-            name: item.title,
-
-            ...(item.image
-              ? {
-                  images: [item.image],
-                }
-              : {}),
-          },
-
-          unit_amount: Math.round(
-            item.price * 100
-          ),
-        },
-
-        quantity: item.quantity,
-      }));
-
-    // ========================================
-    // Base URL
-    // ========================================
-
-    const baseUrl =
-      process.env.NEXT_PUBLIC_BASE_URL ||
-      "http://localhost:3000";
-
-    // ========================================
-    // Create Stripe Session
-    // ========================================
-
-    const session =
-      await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-
-        line_items: lineItems,
-
-        mode: "payment",
-
-        metadata: {
-          orderId: order._id.toString(),
-          userId: user.id.toString(),
-        },
-
-        success_url:
-          `${baseUrl}/payment/success` +
-          `?session_id={CHECKOUT_SESSION_ID}` +
-          `&order_id=${order._id}`,
-
-        cancel_url:
-          `${baseUrl}/checkout`,
-      });
-
-    // ========================================
-    // Response
-    // ========================================
-
+    // COD orders do not require online payment
     return NextResponse.json(
       {
         success: true,
-        url: session.url,
-        sessionId: session.id,
+        message: "Cash on Delivery selected. No online payment is required.",
+        data: {
+          orderId: order._id.toString(),
+          paymentMethod: "COD",
+          totalPrice: order.totalPrice,
+          isPaid: order.isPaid,
+        },
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error(
-      "Stripe Checkout Error:",
-      error
-    );
+    console.error("Checkout API Error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to create Stripe checkout session",
+        message: "Failed to process checkout",
       },
       { status: 500 }
     );

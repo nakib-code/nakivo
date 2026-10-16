@@ -79,6 +79,7 @@ export interface IShippingAddress {
   address: string;
   city: string;
   phone: string;
+  deliveryArea?: "INSIDE_DHAKA" | "OUTSIDE_DHAKA";
 }
 
 export interface IOrder extends Document {
@@ -86,10 +87,12 @@ export interface IOrder extends Document {
   user: Types.ObjectId | IUser;
   orderItems: IOrderItem[];
   shippingAddress: IShippingAddress;
-  paymentMethod: string;
+  paymentMethod: "COD";
+  subtotal?: number;
+  deliveryCharge?: number;
   totalPrice: number;
   isPaid: boolean;
   status: "Pending" | "Processing" | "Delivered" | "Cancelled";
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date;
+  updatedAt: Date;
 }

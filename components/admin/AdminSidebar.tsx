@@ -45,6 +45,11 @@ const menuItems = [
     href: "/admin/hero",
     icon: Users,
   },
+    {
+    label: "Settings",
+    href: "/admin/settings",
+    icon: Settings,
+  },
 ];
 
 export default function AdminSidebar() {

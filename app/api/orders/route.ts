@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isValidObjectId, startSession } from "mongoose";
 
 import connectDB from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
 import Order from "@/models/Order";
 import Product from "@/models/Product";
+import StoreSettings from "@/models/StoreSettings";
 
 // ==================================================
 // TYPES
@@ -19,11 +21,27 @@ interface ShippingAddressInput {
   address: string;
   city: string;
   phone: string;
+  deliveryArea: "INSIDE_DHAKA" | "OUTSIDE_DHAKA";
+}
+
+interface OrderItemSnapshot {
+  product: unknown;
+  title: string;
+  image: string;
+  price: number;
+  quantity: number;
 }
 
 // ==================================================
-// FLASH SALE PRICE HELPER
+// HELPERS
 // ==================================================
+
+function errorResponse(message: string, status = 400) {
+  return NextResponse.json(
+    { success: false, message },
+    { status }
+  );
+}
 
 function getActiveProductPrice(product: {
   price: number;
@@ -34,87 +52,37 @@ function getActiveProductPrice(product: {
 }) {
   const regularPrice = Number(product.price);
 
-  // ----------------------------------------
-  // Invalid regular price
-  // ----------------------------------------
-
-  if (
-    !Number.isFinite(regularPrice) ||
-    regularPrice < 0
-  ) {
-    return {
-      price: 0,
-      isFlashSale: false,
-    };
+  if (!Number.isFinite(regularPrice) || regularPrice <= 0) {
+    return { price: 0, isFlashSale: false };
   }
-
-  // ----------------------------------------
-  // No flash sale
-  // ----------------------------------------
 
   if (
     !product.isFlashSale ||
-    product.flashSalePrice === undefined ||
+    product.flashSalePrice == null ||
     !product.flashSaleStart ||
     !product.flashSaleEnd
   ) {
-    return {
-      price: regularPrice,
-      isFlashSale: false,
-    };
+    return { price: regularPrice, isFlashSale: false };
   }
 
-  // ----------------------------------------
-  // Flash Sale Dates
-  // ----------------------------------------
-
   const now = Date.now();
-
-  const start = new Date(
-    product.flashSaleStart
-  ).getTime();
-
-  const end = new Date(
-    product.flashSaleEnd
-  ).getTime();
-
-  const flashPrice = Number(
-    product.flashSalePrice
-  );
-
-  // ----------------------------------------
-  // Validate Flash Sale
-  // ----------------------------------------
+  const start = new Date(product.flashSaleStart).getTime();
+  const end = new Date(product.flashSaleEnd).getTime();
+  const flashPrice = Number(product.flashSalePrice);
 
   const isActive =
     Number.isFinite(start) &&
     Number.isFinite(end) &&
     Number.isFinite(flashPrice) &&
-    start <= end &&
-    now >= start &&
+    start <= now &&
     now <= end &&
+    start <= end &&
     flashPrice > 0 &&
     flashPrice < regularPrice;
 
-  // ----------------------------------------
-  // Active Flash Sale
-  // ----------------------------------------
-
-  if (isActive) {
-    return {
-      price: flashPrice,
-      isFlashSale: true,
-    };
-  }
-
-  // ----------------------------------------
-  // Flash Sale Inactive / Expired
-  // ----------------------------------------
-
-  return {
-    price: regularPrice,
-    isFlashSale: false,
-  };
+  return isActive
+    ? { price: flashPrice, isFlashSale: true }
+    : { price: regularPrice, isFlashSale: false };
 }
 
 // ==================================================
@@ -122,508 +90,379 @@ function getActiveProductPrice(product: {
 // ==================================================
 
 export async function POST(req: NextRequest) {
-  try {
-    // ========================================
-    // Authentication
-    // ========================================
+  let session: Awaited<ReturnType<typeof startSession>> | undefined;
 
+  try {
+    // Authentication
     const user = await getCurrentUser();
 
     if (!user) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Authentication required",
-        },
-        {
-          status: 401,
-        }
-      );
+      return errorResponse("Authentication required.", 401);
     }
-
-    // ========================================
-    // Database
-    // ========================================
 
     await connectDB();
 
-    // ========================================
-    // Request Body
-    // ========================================
-
-    const body = await req.json();
-
-    const {
-      items,
-      shippingAddress,
-      paymentMethod = "COD",
-    } = body as {
-      items: OrderItemInput[];
-      shippingAddress: ShippingAddressInput;
-      paymentMethod?: "COD" | "STRIPE";
+    // Parse request safely
+    let body: {
+      items?: OrderItemInput[];
+      shippingAddress?: ShippingAddressInput;
+      paymentMethod?: string;
     };
 
-    // ========================================
-    // Validate Items
-    // ========================================
+    try {
+      body = await req.json();
+    } catch {
+      return errorResponse("Invalid request body.");
+    }
+
+    const { items, shippingAddress } = body;
+
+    // COD is the only supported payment method.
+    if (
+      body.paymentMethod !== undefined &&
+      body.paymentMethod !== "COD"
+    ) {
+      return errorResponse(
+        "Only Cash on Delivery is currently supported."
+      );
+    }
+
+    // Validate items
+    if (!Array.isArray(items) || items.length === 0) {
+      return errorResponse(
+        "Order must contain at least one product."
+      );
+    }
+
+    if (items.length > 100) {
+      return errorResponse(
+        "Too many different products in one order."
+      );
+    }
+
+    // Validate shipping information
+    if (
+      !shippingAddress ||
+      typeof shippingAddress.address !== "string" ||
+      typeof shippingAddress.city !== "string" ||
+      typeof shippingAddress.phone !== "string"
+    ) {
+      return errorResponse("Valid shipping information is required.");
+    }
+
+    const address = shippingAddress.address.trim();
+    const city = shippingAddress.city.trim();
+    const phone = shippingAddress.phone.trim();
+    const deliveryArea = shippingAddress.deliveryArea;
+
+    if (!address || address.length > 500) {
+      return errorResponse("Please provide a valid shipping address.");
+    }
+
+    if (!city || city.length > 100) {
+      return errorResponse("Please provide a valid city.");
+    }
+
+    if (!phone || phone.length > 30) {
+      return errorResponse("Please provide a valid phone number.");
+    }
 
     if (
-      !Array.isArray(items) ||
-      items.length === 0
+      deliveryArea !== "INSIDE_DHAKA" &&
+      deliveryArea !== "OUTSIDE_DHAKA"
     ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Order must contain at least one product",
-        },
-        {
-          status: 400,
-        }
-      );
+      return errorResponse("Please select a valid delivery area.");
     }
 
-    // ========================================
-    // Validate Shipping Address
-    // ========================================
-
-    if (!shippingAddress) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Shipping address is required",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    const {
-      address,
-      city,
-      phone,
-    } = shippingAddress;
-
-    if (!address?.trim()) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Shipping address is required",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    if (!city?.trim()) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "City is required",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    if (!phone?.trim()) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Phone number is required",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    // ========================================
-    // Validate Payment Method
-    // ========================================
-
-    if (
-      !["COD", "STRIPE"].includes(
-        paymentMethod
-      )
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Invalid payment method",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    // ========================================
-    // Prepare Order Items
-    // ========================================
-
-    const orderItems = [];
-
-    let totalPrice = 0;
-
-    // ========================================
-    // Process Each Product
-    // ========================================
+    // Validate and combine duplicate product IDs.
+    const quantities = new Map<string, number>();
 
     for (const item of items) {
-      // ----------------------------------------
-      // Validate Product ID
-      // ----------------------------------------
-
-      if (!item.product) {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              "Product ID is required",
-          },
-          {
-            status: 400,
-          }
-        );
+      if (
+        !item ||
+        typeof item.product !== "string" ||
+        !isValidObjectId(item.product)
+      ) {
+        return errorResponse("A valid product ID is required.");
       }
 
-      // ----------------------------------------
-      // Validate Quantity
-      // ----------------------------------------
-
-      const quantity = Number(
-        item.quantity
-      );
+      const quantity = Number(item.quantity);
 
       if (
-        !Number.isInteger(quantity) ||
-        quantity < 1
+        !Number.isSafeInteger(quantity) ||
+        quantity < 1 ||
+        quantity > 100
       ) {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              "Invalid product quantity",
-          },
-          {
-            status: 400,
-          }
+        return errorResponse("Invalid product quantity.");
+      }
+
+      const productId = item.product;
+      const combinedQuantity =
+        (quantities.get(productId) ?? 0) + quantity;
+
+      if (combinedQuantity > 100) {
+        return errorResponse(
+          "The quantity for a product cannot exceed 100."
         );
       }
 
-      // ----------------------------------------
-      // Find Product
-      // ----------------------------------------
-
-      const product =
-        await Product.findById(
-          item.product
-        );
-
-      if (!product) {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              "One of the selected products was not found",
-          },
-          {
-            status: 404,
-          }
-        );
-      }
-
-      // ----------------------------------------
-      // Check Stock
-      // ----------------------------------------
-
-      if (
-        product.stock < quantity
-      ) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: `${product.title} has only ${product.stock} items available`,
-          },
-          {
-            status: 400,
-          }
-        );
-      }
-
-      // ----------------------------------------
-      // Get Server-Side Price
-      // ----------------------------------------
-
-      const {
-        price: finalPrice,
-        isFlashSale,
-      } =
-        getActiveProductPrice(
-          product
-        );
-
-      // ----------------------------------------
-      // Validate Final Price
-      // ----------------------------------------
-
-      if (
-        !Number.isFinite(
-          finalPrice
-        ) ||
-        finalPrice <= 0
-      ) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: `Invalid price for ${product.title}`,
-          },
-          {
-            status: 400,
-          }
-        );
-      }
-
-      // ----------------------------------------
-      // Calculate Item Total
-      // ----------------------------------------
-
-      const itemTotal =
-        finalPrice * quantity;
-
-      totalPrice += itemTotal;
-
-      // ----------------------------------------
-      // Product Image
-      // ----------------------------------------
-
-      const image =
-        product.images?.[0]?.url ||
-        "";
-
-      // ----------------------------------------
-      // Save Order Item
-      // ----------------------------------------
-
-      orderItems.push({
-        product: product._id,
-        title: product.title,
-        quantity,
-        image,
-
-        // IMPORTANT:
-        // Save the actual price paid
-        price: finalPrice,
-
-        // This is optional.
-        // Remove if your OrderSchema
-        // does not contain this field.
-        isFlashSale,
-      });
+      quantities.set(productId, combinedQuantity);
     }
 
-    // ========================================
-    // Validate Total
-    // ========================================
+    // Read delivery settings from the database.
+    // The settings document must already exist.
+    const settings = await StoreSettings.findOne().lean();
+
+    if (!settings) {
+      console.error("Store delivery settings are not configured.");
+
+      return errorResponse(
+        "Delivery settings are not configured. Please contact the store.",
+        500
+      );
+    }
+
+    const insideCharge = Number(settings.insideDhakaCharge);
+    const outsideCharge = Number(settings.outsideDhakaCharge);
+    const freeThreshold = Number(settings.freeDeliveryThreshold);
 
     if (
-      !Number.isFinite(totalPrice) ||
-      totalPrice <= 0
+      !Number.isFinite(insideCharge) ||
+      insideCharge < 0 ||
+      !Number.isFinite(outsideCharge) ||
+      outsideCharge < 0
     ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Invalid order total",
-        },
-        {
-          status: 400,
-        }
+      console.error("Invalid delivery charges in store settings.");
+
+      return errorResponse(
+        "Delivery settings are invalid. Please contact the store.",
+        500
       );
     }
 
-    // ========================================
-    // Create Order
-    // ========================================
+    // Start a transaction for order creation and stock changes.
+    session = await startSession();
 
-    const order =
-      await Order.create({
-        user: user.id,
+    let createdOrder: unknown;
 
-        orderItems,
+    await session.withTransaction(async () => {
+      const orderItems: OrderItemSnapshot[] = [];
+      let subtotal = 0;
 
-        shippingAddress: {
-          address:
-            address.trim(),
+      // Read the current product and price from the server.
+      for (const [productId, quantity] of quantities.entries()) {
+        const product = await Product.findById(productId).session(
+          session!
+        );
 
-          city: city.trim(),
+        if (!product) {
+          throw new Error("ORDER_PRODUCT_NOT_FOUND");
+        }
 
-          phone: phone.trim(),
-        },
+        if (
+          !Number.isSafeInteger(product.stock) ||
+          product.stock < quantity
+        ) {
+          throw new Error(
+            `ORDER_INSUFFICIENT_STOCK:${product.title}:${Math.max(
+              0,
+              Number(product.stock) || 0
+            )}`
+          );
+        }
 
-        paymentMethod,
+        const { price } = getActiveProductPrice(product);
 
-        totalPrice,
+        if (!Number.isFinite(price) || price <= 0) {
+          throw new Error(
+            `ORDER_INVALID_PRICE:${product.title}`
+          );
+        }
 
-        isPaid: false,
+        subtotal += price * quantity;
 
-        status: "Pending",
-      });
+        orderItems.push({
+          product: product._id,
+          title: product.title,
+          image: product.images?.[0]?.url || "",
+          price,
+          quantity,
+        });
+      }
 
-    // ========================================
-    // Reduce Product Stock
-    // ========================================
+      if (!Number.isFinite(subtotal) || subtotal <= 0) {
+        throw new Error("ORDER_INVALID_TOTAL");
+      }
 
-    for (const item of orderItems) {
-      await Product.findByIdAndUpdate(
-        item.product,
-        {
-          $inc: {
-            stock: -item.quantity,
+      // Calculate delivery charge on the server.
+      const freeDeliveryEnabled =
+        settings.freeDeliveryEnabled === true;
+
+      const qualifiesForFreeDelivery =
+        freeDeliveryEnabled &&
+        Number.isFinite(freeThreshold) &&
+        freeThreshold >= 0 &&
+        subtotal >= freeThreshold;
+
+      const deliveryCharge = qualifiesForFreeDelivery
+        ? 0
+        : deliveryArea === "INSIDE_DHAKA"
+          ? insideCharge
+          : outsideCharge;
+
+      const totalPrice = subtotal + deliveryCharge;
+
+      if (!Number.isFinite(totalPrice) || totalPrice <= 0) {
+        throw new Error("ORDER_INVALID_TOTAL");
+      }
+
+      // Atomically decrease stock only if enough stock remains.
+      // A failed update aborts the transaction.
+      for (const item of orderItems) {
+        const result = await Product.updateOne(
+          {
+            _id: item.product,
+            stock: { $gte: item.quantity },
           },
-        }
-      );
-    }
+          {
+            $inc: { stock: -item.quantity },
+          },
+          { session }
+        );
 
-    // ========================================
-    // Response
-    // ========================================
+        if (result.modifiedCount !== 1) {
+          throw new Error("ORDER_STOCK_CHANGED");
+        }
+      }
+
+      const [order] = await Order.create(
+        [
+          {
+            user: user.id,
+            orderItems,
+            shippingAddress: {
+              address,
+              city,
+              phone,
+              deliveryArea,
+            },
+            paymentMethod: "COD",
+            subtotal,
+            deliveryCharge,
+            totalPrice,
+            isPaid: false,
+            status: "Pending",
+          },
+        ],
+        { session }
+      );
+
+      createdOrder = order;
+    });
 
     return NextResponse.json(
       {
         success: true,
-
-        message:
-          "Order created successfully",
-
-        data: order,
+        message: "Order created successfully.",
+        data: createdOrder,
       },
-      {
-        status: 201,
-      }
+      { status: 201 }
     );
   } catch (error) {
-    console.error(
-      "POST Order Error:",
-      error
-    );
+    console.error("POST Order Error:", error);
 
-    return NextResponse.json(
-      {
-        success: false,
-
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to create order",
-      },
-      {
-        status: 500,
+    if (error instanceof Error) {
+      if (error.message === "ORDER_PRODUCT_NOT_FOUND") {
+        return errorResponse(
+          "One of the selected products was not found.",
+          404
+        );
       }
+
+      if (error.message.startsWith("ORDER_INSUFFICIENT_STOCK:")) {
+        const [, title, stock] = error.message.split(":");
+
+        return errorResponse(
+          `${title} has only ${stock} items available.`,
+          400
+        );
+      }
+
+      if (error.message.startsWith("ORDER_INVALID_PRICE:")) {
+        const title = error.message.split(":")[1];
+
+        return errorResponse(
+          `Invalid price for ${title}.`,
+          400
+        );
+      }
+
+      if (
+        error.message === "ORDER_INVALID_TOTAL"
+      ) {
+        return errorResponse("Unable to calculate the order total.", 400);
+      }
+
+      if (error.message === "ORDER_STOCK_CHANGED") {
+        return errorResponse(
+          "Product stock changed during checkout. Please try again.",
+          409
+        );
+      }
+    }
+
+    return errorResponse(
+      "Failed to create order. Please try again.",
+      500
     );
+  } finally {
+    if (session) {
+      await session.endSession();
+    }
   }
 }
 
 // ==================================================
 // GET ORDERS
+// Admin: all orders
+// Customer: own orders only
 // ==================================================
 
 export async function GET() {
   try {
-    // ========================================
-    // Authentication
-    // ========================================
-
-    const user =
-      await getCurrentUser();
+    const user = await getCurrentUser();
 
     if (!user) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Authentication required",
-        },
-        {
-          status: 401,
-        }
-      );
+      return errorResponse("Authentication required.", 401);
     }
-
-    // ========================================
-    // Database
-    // ========================================
 
     await connectDB();
 
-    // ========================================
-    // Admin → All Orders
-    // Customer → Own Orders
-    // ========================================
+    const isAdmin = user.role?.toLowerCase() === "admin";
 
-    const query =
-      user.role === "admin"
-        ? {}
-        : {
-            user: user.id,
-          };
+    const query = isAdmin
+      ? {}
+      : { user: user.id };
 
-    // ========================================
-    // Fetch Orders
-    // ========================================
-
-    const orders =
-      await Order.find(query)
-        .populate(
-          "user",
-          "name email image"
-        )
-        .populate(
-          "orderItems.product",
-          "title price images isFlashSale flashSalePrice flashSaleStart flashSaleEnd"
-        )
-        .sort({
-          createdAt: -1,
-        });
-
-    // ========================================
-    // Response
-    // ========================================
+    const orders = await Order.find(query)
+      .populate("user", "name email image")
+      .populate(
+        "orderItems.product",
+        "title price images isFlashSale flashSalePrice flashSaleStart flashSaleEnd"
+      )
+      .sort({ createdAt: -1 })
+      .lean();
 
     return NextResponse.json(
       {
         success: true,
         data: orders,
       },
-      {
-        status: 200,
-      }
+      { status: 200 }
     );
   } catch (error) {
-    console.error(
-      "GET Orders Error:",
-      error
-    );
+    console.error("GET Orders Error:", error);
 
-    return NextResponse.json(
-      {
-        success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch orders",
-      },
-      {
-        status: 500,
-      }
-    );
+    return errorResponse("Failed to fetch orders.", 500);
   }
 }

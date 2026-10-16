@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isValidObjectId } from "mongoose";
 
 import connectDB from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
@@ -28,10 +29,7 @@ export async function GET(
   { params }: RouteParams
 ) {
   try {
-    // ========================================
     // Authentication
-    // ========================================
-
     const user = await getCurrentUser();
 
     if (!user) {
@@ -44,37 +42,24 @@ export async function GET(
       );
     }
 
-    // ========================================
-    // Database
-    // ========================================
-
     await connectDB();
 
-    // ========================================
-    // Params
-    // ========================================
-
+    // Validate order ID
     const { id } = await params;
 
-    if (!id) {
+    if (!id || !isValidObjectId(id)) {
       return NextResponse.json(
         {
           success: false,
-          message: "Order ID is required",
+          message: "Invalid order ID",
         },
         { status: 400 }
       );
     }
 
-    // ========================================
-    // Find Order
-    // ========================================
-
+    // Find order
     const order = await Order.findById(id)
-      .populate(
-        "user",
-        "name email image"
-      )
+      .populate("user", "name email image")
       .populate(
         "orderItems.product",
         "title price images isFlashSale flashSalePrice flashSaleStart flashSaleEnd"
@@ -90,28 +75,27 @@ export async function GET(
       );
     }
 
-    // ========================================
-    // Authorization
-    // Admin → Can see any order
-    // Customer → Can see only own order
-    // ========================================
+    // Authorization: admins can view all orders.
+    // Customers can view only their own orders.
+    if (user.role !== "admin") {
+      const populatedUser = order.user as unknown as
+        | { _id?: { toString(): string } }
+        | null;
 
-    if (
-      user.role !== "admin" &&
-      order.user._id.toString() !== user.id.toString()
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "You are not authorized to view this order",
-        },
-        { status: 403 }
-      );
+      const orderOwnerId = populatedUser?._id
+        ? populatedUser._id.toString()
+        : "";
+
+      if (!orderOwnerId || orderOwnerId !== String(user.id)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "You are not authorized to view this order",
+          },
+          { status: 403 }
+        );
+      }
     }
-
-    // ========================================
-    // Response
-    // ========================================
 
     return NextResponse.json(
       {
@@ -121,18 +105,12 @@ export async function GET(
       { status: 200 }
     );
   } catch (error) {
-    console.error(
-      "GET Single Order Error:",
-      error
-    );
+    console.error("GET Single Order Error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch order",
+        message: "Failed to fetch order",
       },
       { status: 500 }
     );
@@ -140,7 +118,7 @@ export async function GET(
 }
 
 // ==================================================
-// UPDATE ORDER STATUS
+// UPDATE ORDER STATUS — ADMIN ONLY
 // ==================================================
 
 export async function PATCH(
@@ -148,10 +126,7 @@ export async function PATCH(
   { params }: RouteParams
 ) {
   try {
-    // ========================================
     // Authentication
-    // ========================================
-
     const user = await getCurrentUser();
 
     if (!user) {
@@ -164,10 +139,7 @@ export async function PATCH(
       );
     }
 
-    // ========================================
-    // Admin Authorization
-    // ========================================
-
+    // Admin authorization
     if (user.role !== "admin") {
       return NextResponse.json(
         {
@@ -178,43 +150,41 @@ export async function PATCH(
       );
     }
 
-    // ========================================
-    // Database
-    // ========================================
-
     await connectDB();
 
-    // ========================================
-    // Params
-    // ========================================
-
+    // Validate order ID
     const { id } = await params;
 
-    if (!id) {
+    if (!id || !isValidObjectId(id)) {
       return NextResponse.json(
         {
           success: false,
-          message: "Order ID is required",
+          message: "Invalid order ID",
         },
         { status: 400 }
       );
     }
 
-    // ========================================
-    // Request Body
-    // ========================================
+    // Validate request body
+    let body: { status?: unknown };
 
-    const body = await req.json();
-    const status = body.status as string;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid request body",
+        },
+        { status: 400 }
+      );
+    }
 
-    // ========================================
-    // Validate Status
-    // ========================================
+    const status = body.status;
 
     if (
-      !allowedStatuses.includes(
-        status as OrderStatus
-      )
+      typeof status !== "string" ||
+      !allowedStatuses.includes(status as OrderStatus)
     ) {
       return NextResponse.json(
         {
@@ -225,10 +195,7 @@ export async function PATCH(
       );
     }
 
-    // ========================================
-    // Find Order
-    // ========================================
-
+    // Find order
     const order = await Order.findById(id);
 
     if (!order) {
@@ -241,17 +208,9 @@ export async function PATCH(
       );
     }
 
-    // ========================================
-    // Update Status
-    // ========================================
-
+    // Update status
     order.status = status as OrderStatus;
-
     await order.save();
-
-    // ========================================
-    // Response
-    // ========================================
 
     return NextResponse.json(
       {
@@ -262,18 +221,12 @@ export async function PATCH(
       { status: 200 }
     );
   } catch (error) {
-    console.error(
-      "PATCH Order Status Error:",
-      error
-    );
+    console.error("PATCH Order Status Error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to update order status",
+        message: "Failed to update order status",
       },
       { status: 500 }
     );
