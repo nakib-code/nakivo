@@ -59,7 +59,7 @@ export default function ProductCard({
       {/* ================= IMAGE ================= */}
       <div className="relative overflow-hidden bg-slate-100">
         {/* Discount */}
-        <div className="absolute left-2.5 top-2.5 z-20 sm:left-4 sm:top-4">
+        {/* <div className="absolute left-2.5 top-2.5 z-20 sm:left-4 sm:top-4">
           <span
             className="
               inline-flex items-center rounded-full
@@ -71,7 +71,7 @@ export default function ProductCard({
           >
             -20%
           </span>
-        </div>
+        </div> */}
 
         {/* Wishlist */}
         <button

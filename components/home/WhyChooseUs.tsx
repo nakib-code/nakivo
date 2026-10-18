@@ -1,8 +1,10 @@
+
 import {
   ShieldCheck,
   Truck,
   RotateCcw,
   Headphones,
+  ArrowUpRight,
 } from "lucide-react";
 
 const features = [
@@ -16,185 +18,84 @@ const features = [
     icon: ShieldCheck,
     title: "Secure Payment",
     description:
-      "Your payments are protected with secure and trusted payment methods.",
+      "Shop with confidence using secure and trusted payment methods.",
   },
   {
     icon: RotateCcw,
     title: "Easy Returns",
     description:
-      "Not satisfied? Enjoy a simple and hassle-free return experience.",
+      "Enjoy a simple and hassle-free return experience when you need it.",
   },
   {
     icon: Headphones,
-    title: "24/7 Support",
+    title: "Dedicated Support",
     description:
-      "Our support team is always ready to help whenever you need us.",
+      "Our support team is ready to help whenever you need assistance.",
   },
 ];
 
 export default function WhyChooseUs() {
   return (
-    <section className="w-full">
-      <div
-        className="
-          mx-auto
-          w-full
-          max-w-[1600px]
-          px-4
-          py-12
-          sm:px-6
-          sm:py-16
-          lg:px-8
-          xl:px-10
-          2xl:px-12
-        "
-      >
-        {/* Header */}
+    <section className="w-full bg-slate-50/70">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-20 xl:px-10">
+        {/* Section heading */}
+        <div className="mx-auto mb-9 max-w-2xl text-center sm:mb-12">
+          <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600 shadow-sm sm:text-xs">
+            The NAKIVO Difference
+          </span>
 
-        <div className="mx-auto mb-10 max-w-2xl text-center sm:mb-12">
-          <p
-            className="
-              mb-2
-              text-[10px]
-              font-bold
-              uppercase
-              tracking-[0.2em]
-              text-slate-400
-              sm:text-xs
-            "
-          >
-            Why Choose Us
-          </p>
-
-          <h2
-            className="
-              text-2xl
-              font-black
-              tracking-tight
-              text-slate-950
-              sm:text-3xl
-              md:text-4xl
-            "
-          >
-            Shopping Made Simple
+          <h2 className="mt-5 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl md:text-4xl lg:text-5xl">
+            Shopping Made{" "}
+            <span className="text-slate-400">Simple.</span>
           </h2>
 
-          <p
-            className="
-              mt-3
-              text-xs
-              leading-5
-              text-slate-500
-              sm:text-sm
-              sm:leading-6
-            "
-          >
-            Everything you need for a smooth, secure,
-            and enjoyable shopping experience.
+          <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-slate-500 sm:text-base sm:leading-7">
+            Great products, reliable service, and a shopping
+            experience designed around you.
           </p>
         </div>
 
-        {/* Features */}
-
-        <div
-          className="
-            grid
-            grid-cols-1
-            overflow-hidden
-            rounded-3xl
-            border
-            border-slate-200
-            bg-white
-            sm:grid-cols-2
-            lg:grid-cols-4
-          "
-        >
+        {/* Feature cards */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
           {features.map((feature, index) => {
             const Icon = feature.icon;
 
             return (
-              <div
+              <article
                 key={feature.title}
-                className={`
-                  group
-                  relative
-                  p-6
-                  text-center
-                  transition-colors
-                  duration-300
-                  hover:bg-slate-50
-                  sm:p-8
-                  ${
-                    index !== 0
-                      ? "border-t sm:border-t-0 sm:border-l border-slate-200"
-                      : ""
-                  }
-                  ${
-                    index === 2
-                      ? "lg:border-l"
-                      : ""
-                  }
-                `}
+                className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 transition-all duration-300 hover:-translate-y-1 hover:border-slate-300 hover:shadow-xl hover:shadow-slate-200/50 sm:p-7 lg:p-6 xl:p-7"
               >
-                {/* Icon */}
+                {/* Decorative number */}
+                <span className="absolute right-5 top-5 text-xs font-bold tabular-nums text-slate-300 transition-colors duration-300 group-hover:text-slate-500">
+                  0{index + 1}
+                </span>
 
-                <div
-                  className="
-                    mx-auto
-                    flex
-                    h-14
-                    w-14
-                    items-center
-                    justify-center
-                    rounded-2xl
-                    bg-slate-100
-                    text-slate-900
-                    transition-all
-                    duration-300
-                    group-hover:scale-110
-                    group-hover:bg-black
-                    group-hover:text-white
-                    sm:h-16
-                    sm:w-16
-                  "
-                >
-                  <Icon
-                    size={25}
-                    strokeWidth={1.8}
-                  />
+                {/* Icon */}
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-900 transition-all duration-300 group-hover:bg-slate-950 group-hover:text-white group-hover:shadow-lg sm:h-16 sm:w-16">
+                  <Icon size={26} strokeWidth={1.7} />
                 </div>
 
-                {/* Title */}
-
-                <h3
-                  className="
-                    mt-5
-                    text-base
-                    font-bold
-                    text-slate-900
-                    sm:text-lg
-                  "
-                >
+                {/* Text */}
+                <h3 className="mt-6 text-base font-bold tracking-tight text-slate-950 sm:text-lg">
                   {feature.title}
                 </h3>
 
-                {/* Description */}
-
-                <p
-                  className="
-                    mx-auto
-                    mt-2
-                    max-w-xs
-                    text-xs
-                    leading-5
-                    text-slate-500
-                    sm:text-sm
-                    sm:leading-6
-                  "
-                >
+                <p className="mt-2 text-sm leading-6 text-slate-500">
                   {feature.description}
                 </p>
-              </div>
+
+                {/* Bottom accent */}
+                <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4">
+                  <span className="text-xs font-semibold text-slate-400 transition-colors duration-300 group-hover:text-slate-700">
+                    Shop with confidence
+                  </span>
+
+                  <ArrowUpRight
+                    size={17}
+                    className="text-slate-300 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-slate-900"
+                  />
+                </div>
+              </article>
             );
           })}
         </div>

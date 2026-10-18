@@ -5,65 +5,90 @@ import { ArrowRight, Sparkles } from "lucide-react";
 
 export default function PromoBanner() {
   return (
-    <section className="w-full">
-      <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
-        <div className="relative isolate min-h-[380px] overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-800 to-indigo-950 sm:min-h-[420px] lg:min-h-[460px]">
+    <section className="w-full py-6 sm:py-8 lg:py-10">
+      <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 xl:px-10">
+        <div className="relative isolate overflow-hidden rounded-2xl bg-slate-950 sm:rounded-3xl">
+          {/* Background image */}
+          <div className="absolute inset-0 -z-20">
+            <Image
+              src="/promo-banner.png"
+              alt="Special collection promotion"
+              fill
+              priority
+              sizes="(max-width: 640px) 100vw, (max-width: 1280px) 95vw, 1600px"
+              className="object-cover object-center"
+            />
+          </div>
 
-          {/* Background Color */}
-          <div className="absolute inset-0 -z-20 bg-gradient-to-br from-slate-950 via-slate-800 to-indigo-950" />
-
-          {/* Background Image */}
-          <Image
-            src="/promo-banner.png"
-            alt="NAKIVO special fashion promotion"
-            fill
-            priority
-            sizes="(max-width: 1600px) 100vw, 1600px"
-            className="-z-10 object-contain object-center"
+          {/* Dark overlay for readability */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-black/85 via-black/60 to-black/10 sm:from-black/80 sm:via-black/45 sm:to-transparent"
           />
 
-          {/* Overlay */}
-          <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-r from-black/65 via-black/25 to-transparent" />
+          {/* Additional mobile overlay */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -z-10 bg-black/15 sm:bg-transparent"
+          />
 
           {/* Content */}
-          <div className="relative z-10 flex min-h-[380px] max-w-2xl flex-col justify-center px-5 py-10 sm:min-h-[420px] sm:px-10 lg:min-h-[460px] lg:px-14 xl:px-16">
-
-            {/* Badge */}
-            <div className="mb-5 flex w-fit items-center gap-2 rounded-full border border-white/25 bg-black/25 px-4 py-2 backdrop-blur-sm">
-              <Sparkles size={15} className="text-yellow-400" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white sm:text-xs">
-                Special Offer
-              </span>
-            </div>
-
-            {/* Heading */}
-            <h2 className="max-w-xl text-3xl font-black leading-tight tracking-tight text-white drop-shadow-md sm:text-4xl md:text-5xl lg:text-6xl">
-              Upgrade Your
-              <span className="block text-white/90">
-                Everyday Style.
-              </span>
-            </h2>
-
-            {/* Description */}
-            <p className="mt-5 max-w-lg text-sm leading-6 text-white/90 sm:text-base sm:leading-7">
-              Discover premium products at prices designed to make your everyday shopping experience better.
-            </p>
-
-            {/* CTA Button */}
-            <div className="mt-7">
-              <Link
-                href="/products"
-                className="group inline-flex items-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-bold text-black shadow-xl transition-all duration-300 hover:gap-3 hover:bg-slate-100 active:scale-95 sm:px-7"
-              >
-                Explore Collection
-                <ArrowRight
-                  size={17}
-                  className="transition-transform duration-300 group-hover:translate-x-1"
+          <div className="flex min-h-[400px] items-center px-5 py-10 sm:min-h-[440px] sm:px-10 sm:py-12 md:min-h-[480px] lg:min-h-[520px] lg:px-14 xl:px-16">
+            <div className="max-w-2xl">
+              {/* Badge */}
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-2 backdrop-blur-md sm:mb-6">
+                <Sparkles
+                  size={15}
+                  className="text-yellow-400"
                 />
-              </Link>
-            </div>
 
+                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-white sm:text-xs">
+                  Special Offer
+                </span>
+              </div>
+
+              {/* Heading */}
+              <h2 className="max-w-xl text-3xl font-extrabold leading-[1.15] tracking-tight text-white sm:text-4xl md:text-5xl lg:text-6xl">
+                Upgrade Your
+                <span className="mt-1 block text-yellow-400">
+                  Everyday Style.
+                </span>
+              </h2>
+
+              {/* Description */}
+              <p className="mt-4 max-w-lg text-sm leading-6 text-white/85 sm:mt-5 sm:text-base sm:leading-7">
+                Discover premium products at amazing prices
+                and find everything you need to elevate your
+                everyday shopping experience.
+              </p>
+
+              {/* CTA */}
+              <div className="mt-7 sm:mt-8">
+                <Link
+                  href="/products"
+                  className="group inline-flex min-h-12 items-center justify-center gap-2.5 rounded-full bg-white px-6 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-black/20 transition-all duration-300 hover:bg-yellow-400 hover:shadow-xl active:scale-[0.98] sm:px-7"
+                >
+                  Explore Collection
+
+                  <ArrowRight
+                    size={17}
+                    className="transition-transform duration-300 group-hover:translate-x-1"
+                  />
+                </Link>
+              </div>
+
+              {/* Supporting text */}
+              <p className="mt-4 text-xs font-medium text-white/60">
+                Discover your next favorite.
+              </p>
+            </div>
           </div>
+
+          {/* Bottom accent */}
+          <div
+            aria-hidden="true"
+            className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-yellow-400 via-orange-400 to-transparent"
+          />
         </div>
       </div>
     </section>

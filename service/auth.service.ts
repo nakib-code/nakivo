@@ -15,8 +15,10 @@ export async function getUserByEmail(
 ) {
   await connectDB();
 
+  const normalizedEmail = email.trim().toLowerCase();
+
   const query = User.findOne({
-    email: email.toLowerCase(),
+    email: normalizedEmail,
   });
 
   if (includePassword) {
@@ -36,10 +38,21 @@ export async function validateCredentials(
   email: string,
   password: string
 ) {
-  const user = await getUserByEmail(email, true);
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!normalizedEmail || !password) {
+    return null;
+  }
+
+  const user = await getUserByEmail(normalizedEmail, true);
 
   if (!user || !user.password) {
-    throw new Error("Invalid email or password.");
+    return null;
+  }
+
+  // Block inactive users
+  if (user.status !== "active") {
+    return null;
   }
 
   const isPasswordMatched = await bcrypt.compare(
@@ -48,7 +61,7 @@ export async function validateCredentials(
   );
 
   if (!isPasswordMatched) {
-    throw new Error("Invalid email or password.");
+    return null;
   }
 
   return {
@@ -60,23 +73,38 @@ export async function validateCredentials(
   };
 }
 
-export async function createGoogleUser(data: GoogleUserData) {
+export async function createGoogleUser(
+  data: GoogleUserData
+) {
   await connectDB();
 
   return User.create({
-    name: data.name ?? "Google User",
-    email: data.email.toLowerCase(),
+    name: data.name?.trim() || "Google User",
+    email: data.email.trim().toLowerCase(),
     image: data.image ?? "",
     provider: "google",
     role: "customer",
+    status: "active",
   });
 }
 
-export async function findOrCreateGoogleUser(data: GoogleUserData) {
-  let user = await getUserByEmail(data.email);
+export async function findOrCreateGoogleUser(
+  data: GoogleUserData
+) {
+  const normalizedEmail = data.email.trim().toLowerCase();
+
+  let user = await getUserByEmail(normalizedEmail);
 
   if (!user) {
-    user = await createGoogleUser(data);
+    user = await createGoogleUser({
+      ...data,
+      email: normalizedEmail,
+    });
+  }
+
+  // Do not allow blocked users to sign in with Google.
+  if (user.status !== "active") {
+    throw new Error("This account is blocked.");
   }
 
   return user;

@@ -1,7 +1,14 @@
+
 "use client";
 
 import { useState } from "react";
-import { Control, FieldPath, FieldValues, useController } from "react-hook-form";
+import {
+  useController,
+  type Control,
+  type FieldPath,
+  type FieldValues,
+} from "react-hook-form";
+import { Eye, EyeOff } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,6 +19,7 @@ interface PasswordInputProps<T extends FieldValues> {
   label?: string;
   placeholder?: string;
   disabled?: boolean;
+  autoComplete?: string;
 }
 
 export default function PasswordInput<T extends FieldValues>({
@@ -20,6 +28,7 @@ export default function PasswordInput<T extends FieldValues>({
   label = "Password",
   placeholder = "Enter your password",
   disabled = false,
+  autoComplete = "current-password",
 }: PasswordInputProps<T>) {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -31,11 +40,14 @@ export default function PasswordInput<T extends FieldValues>({
     name,
   });
 
+  const inputId = String(name);
+  const errorId = `${inputId}-error`;
+
   return (
     <div className="space-y-2">
       <label
-        htmlFor={name}
-        className="text-sm font-medium"
+        htmlFor={inputId}
+        className="text-sm font-medium text-foreground"
       >
         {label}
       </label>
@@ -43,27 +55,36 @@ export default function PasswordInput<T extends FieldValues>({
       <div className="relative">
         <Input
           {...field}
-          id={name}
+          id={inputId}
           type={showPassword ? "text" : "password"}
           placeholder={placeholder}
-          autoComplete="current-password"
+          autoComplete={autoComplete}
           disabled={disabled}
-          className="pr-20"
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
+          className="h-12 pr-14"
         />
 
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size="icon"
+          disabled={disabled}
+          aria-label={showPassword ? "Hide password" : "Show password"}
+          aria-pressed={showPassword}
           onClick={() => setShowPassword((prev) => !prev)}
-          className="absolute right-2 top-1/2 h-8 -translate-y-1/2 px-2"
+          className="absolute right-1 top-1/2 h-10 w-10 -translate-y-1/2"
         >
-          {showPassword ? "Hide" : "Show"}
+          {showPassword ? (
+            <EyeOff className="h-4 w-4" />
+          ) : (
+            <Eye className="h-4 w-4" />
+          )}
         </Button>
       </div>
 
       {error && (
-        <p className="text-sm text-destructive">
+        <p id={errorId} role="alert" className="text-sm text-destructive">
           {error.message}
         </p>
       )}
