@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   Edit,
@@ -36,39 +37,49 @@ export default function AdminCategoriesPage() {
   // Fetch Categories
   // ========================================
 
-  const fetchCategories = async () => {
-    try {
-      setLoading(true);
-
-      const response = await fetch("/api/categories", {
-        method: "GET",
-        cache: "no-store",
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.message || "Failed to fetch categories"
-        );
-      }
-
-      setCategories(result.data || []);
-    } catch (error) {
-      console.error("Fetch Categories Error:", error);
-
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to fetch categories"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchCategories();
+    let active = true;
+
+    async function loadCategories() {
+      try {
+        const response = await fetch("/api/categories", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.message || "Failed to fetch categories"
+          );
+        }
+
+        if (active) {
+          setCategories(result.data || []);
+        }
+      } catch (error) {
+        console.error("Fetch Categories Error:", error);
+
+        if (active) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Failed to fetch categories"
+          );
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadCategories();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   // ========================================
@@ -314,12 +325,14 @@ export default function AdminCategoriesPage() {
 
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted">
+                          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted">
                             {category.image ? (
-                              <img
+                              <Image
                                 src={category.image}
                                 alt={category.name}
-                                className="h-full w-full object-cover"
+                                fill
+                                sizes="44px"
+                                className="object-cover"
                               />
                             ) : (
                               <FolderTree className="h-5 w-5 text-muted-foreground" />
@@ -372,15 +385,14 @@ export default function AdminCategoriesPage() {
                           {/* Edit */}
 
                           <Button
+                            type="button"
                             variant="outline"
                             size="icon"
-                            asChild
+                            disabled
+                            title="Category editing coming soon"
+                            aria-label="Category editing coming soon"
                           >
-                            <Link
-                              href={`/admin/categories/${category._id}/edit`}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Link>
+                            <Edit className="h-4 w-4" />
                           </Button>
 
                           {/* Delete */}
@@ -388,6 +400,7 @@ export default function AdminCategoriesPage() {
                           <Button
                             variant="outline"
                             size="icon"
+                            aria-label={`Delete ${category.name}`}
                             onClick={() =>
                               handleDelete(
                                 category._id

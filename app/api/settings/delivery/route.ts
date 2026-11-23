@@ -1,6 +1,7 @@
-
 import { NextResponse } from "next/server";
+
 import connectDB from "@/lib/db";
+import { normalizeDeliverySettings } from "@/lib/delivery";
 import StoreSettings from "@/models/StoreSettings";
 
 export const dynamic = "force-dynamic";
@@ -9,25 +10,15 @@ export async function GET() {
   try {
     await connectDB();
 
-    let settings = await StoreSettings.findOne({
-      key: "store",
-    }).lean();
-
-    if (!settings) {
-      settings = await StoreSettings.create({
-        key: "store",
-      });
-    }
+    const settings = await StoreSettings.findOne({ key: "store" })
+      .select(
+        "deliveryChargeEnabled defaultDeliveryCharge insideDhakaCharge outsideDhakaCharge freeDeliveryEnabled freeDeliveryThreshold minimumOrderAmount estimatedDeliveryTime"
+      )
+      .lean();
 
     return NextResponse.json({
       success: true,
-      data: {
-        insideDhakaCharge: settings.insideDhakaCharge,
-        outsideDhakaCharge: settings.outsideDhakaCharge,
-        freeDeliveryEnabled: settings.freeDeliveryEnabled,
-        freeDeliveryThreshold: settings.freeDeliveryThreshold,
-        estimatedDeliveryTime: settings.estimatedDeliveryTime,
-      },
+      data: normalizeDeliverySettings(settings),
     });
   } catch (error) {
     console.error("Delivery Settings Error:", error);

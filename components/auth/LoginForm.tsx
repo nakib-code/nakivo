@@ -2,9 +2,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -23,10 +23,32 @@ import AuthDivider from "./AuthDivider";
 import GoogleButton from "./GoogleButton";
 import PasswordInput from "./PasswordInput";
 
+function getSafeCallbackUrl(rawCallbackUrl: string | null): string {
+  if (!rawCallbackUrl) {
+    return "/";
+  }
+
+  const trimmed = rawCallbackUrl.trim();
+  if (
+    !trimmed.startsWith("/") ||
+    trimmed.startsWith("//") ||
+    trimmed.includes("\\") ||
+    trimmed.startsWith("/login") ||
+    trimmed.startsWith("/register")
+  ) {
+    return "/";
+  }
+
+  return trimmed;
+}
+
 export default function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl"));
+  const isBlockedError = searchParams.get("error") === "blocked";
 
   const {
     register,
@@ -62,7 +84,7 @@ export default function LoginForm() {
 
         toast.success("Login successful!");
 
-        router.push("/");
+        router.push(callbackUrl);
         router.refresh();
       } catch (error) {
         console.error("Login error:", error);
@@ -71,27 +93,26 @@ export default function LoginForm() {
     });
   };
 
-  const handleGoogleLogin = async () => {
-    try {
-      setIsGoogleLoading(true);
-      await signIn("google", { callbackUrl: "/" });
-    } catch (error) {
-      console.error("Google login error:", error);
-      toast.error("Unable to continue with Google.");
-      setIsGoogleLoading(false);
-    }
-  };
-
   return (
-    <main className="w-full max-w-md">
+    <div className="w-full max-w-md">
       <div className="rounded-2xl border border-slate-200 bg-background p-5 shadow-sm sm:p-8">
         <AuthHeader
           title="Welcome Back"
           subtitle="Sign in to continue shopping"
         />
 
+        {isBlockedError && (
+          <div
+            role="alert"
+            className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
+            Your account has been suspended. Please contact support for
+            assistance.
+          </div>
+        )}
+
         <div className="mt-6">
-          <GoogleButton />
+          <GoogleButton callbackUrl={callbackUrl} disabled={isPending} />
         </div>
 
         <div className="my-6">
@@ -114,7 +135,7 @@ export default function LoginForm() {
               placeholder="you@example.com"
               aria-invalid={!!errors.email}
               {...register("email")}
-              disabled={isPending || isGoogleLoading}
+              disabled={isPending}
             />
 
             {errors.email && (
@@ -124,40 +145,16 @@ export default function LoginForm() {
             )}
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <label
-                htmlFor="password"
-                className="text-sm font-medium text-foreground"
-              >
-                Password
-              </label>
-
-              <Link
-                href="/forgot-password"
-                className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Forgot password?
-              </Link>
-            </div>
-
-            <PasswordInput
-              control={control}
-              name="password"
-              disabled={isPending || isGoogleLoading}
-            />
-
-            {errors.password && (
-              <p className="text-sm text-destructive" role="alert">
-                {errors.password.message}
-              </p>
-            )}
-          </div>
+          <PasswordInput
+            control={control}
+            name="password"
+            disabled={isPending}
+          />
 
           <Button
             type="submit"
             className="h-11 w-full"
-            disabled={isPending || isGoogleLoading}
+            disabled={isPending}
           >
             {isPending ? (
               <>
@@ -183,6 +180,6 @@ export default function LoginForm() {
           </Link>
         </p>
       </div>
-    </main>
+    </div>
   );
 }

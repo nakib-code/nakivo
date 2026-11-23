@@ -98,21 +98,39 @@ export const authOptions: NextAuthOptions = {
     // JWT
     // =========================
     async jwt({ token, user }) {
+      const ROLE_SYNC_INTERVAL_MS = 60 * 1000; // Refresh role/status every 60s
+
       // Initial login
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.status = user.status ?? "active";
+        token.lastSyncedAt = Date.now();
+        return token;
       }
 
-      // Restore user information from database
-      if ((!token.id || !token.role) && token.email) {
+      const shouldSync =
+        !token.id ||
+        (!token.role && token.status !== "blocked") ||
+        !token.status ||
+        !token.lastSyncedAt ||
+        Date.now() - token.lastSyncedAt > ROLE_SYNC_INTERVAL_MS;
+
+      if (shouldSync && token.email) {
         try {
           const dbUser = await getUserByEmail(token.email);
 
-          if (dbUser) {
-            token.id = dbUser._id.toString();
-            token.role = dbUser.role;
+          if (!dbUser || dbUser.status !== "active") {
+            token.status = "blocked";
+            token.role = undefined;
+            token.lastSyncedAt = Date.now();
+            return token;
           }
+
+          token.id = dbUser._id.toString();
+          token.role = dbUser.role;
+          token.status = dbUser.status;
+          token.lastSyncedAt = Date.now();
         } catch (error) {
           console.error("JWT Callback Error:", error);
         }
@@ -132,6 +150,10 @@ export const authOptions: NextAuthOptions = {
 
         if (token.role) {
           session.user.role = token.role;
+        }
+
+        if (token.status) {
+          session.user.status = token.status;
         }
       }
 
@@ -167,7 +189,11 @@ export const authOptions: NextAuthOptions = {
 export async function getCurrentUser() {
   const session = await getServerSession(authOptions);
 
-  return session?.user ?? null;
+  if (!session?.user || session.user.status === "blocked") {
+    return null;
+  }
+
+  return session.user;
 }
 
 // ======================================================
@@ -177,8 +203,6 @@ export async function getCurrentUser() {
 export async function requireAdmin() {
   const user = await getCurrentUser();
 
-  console.log("AUTH USER:", user);
-
   if (!user) {
     return {
       authorized: false as const,
@@ -187,8 +211,6 @@ export async function requireAdmin() {
       user: null,
     };
   }
-
-  console.log("USER ROLE:", user.role);
 
   if (user.role !== "admin") {
     return {

@@ -16,12 +16,16 @@ export async function getUsers() {
   );
 
 
-  const json = await res.json();
+  const json = (await res.json().catch(() => null)) as {
+    success?: boolean;
+    message?: string;
+    data?: IUser[];
+  } | null;
 
 
-  if (!res.ok || !json.success) {
+  if (!res.ok || !json?.success) {
     throw new Error(
-      json.message ||
+      json?.message ||
       "Failed to fetch users"
     );
   }

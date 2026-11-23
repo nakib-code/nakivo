@@ -1,21 +1,24 @@
-"use client";
-
 import Link from "next/link";
 import { CheckCircle2, ShoppingBag } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { getCurrentUser } from "@/lib/auth";
 
 interface SuccessPageProps {
-  searchParams: {
+  searchParams: Promise<{
     session_id?: string;
     order_id?: string;
-  };
+  }>;
 }
 
-export default function SuccessPage({
+export default async function SuccessPage({
   searchParams,
 }: SuccessPageProps) {
-  const orderId = searchParams.order_id;
+  const [{ order_id: orderId }, user] = await Promise.all([
+    searchParams,
+    getCurrentUser(),
+  ]);
+  const ordersHref = user?.role === "admin" ? "/admin/orders" : "/user/orders";
 
   return (
     <div className="flex min-h-[70vh] items-center justify-center px-4">
@@ -55,9 +58,9 @@ export default function SuccessPage({
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Button asChild>
-            <Link href="/user/orders">
+            <Link href={ordersHref}>
               <ShoppingBag className="mr-2 h-4 w-4" />
-              View My Orders
+              {user?.role === "admin" ? "View Orders" : "View My Orders"}
             </Link>
           </Button>
 

@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isValidObjectId } from "mongoose";
 
 import connectDB from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
-import Order from "@/models/Order";
-
-const ALLOWED_STATUSES = [
-  "Pending",
-  "Processing",
-  "Shipped",
-  "Delivered",
-  "Cancelled",
-] as const;
+import { requireAdmin } from "@/lib/auth";
+import {
+  isValidOrderStatus,
+  OrderServiceError,
+  updateOrderStatus,
+} from "@/service/order/order.service";
 
 export async function PATCH(
   req: NextRequest,
@@ -24,44 +21,22 @@ export async function PATCH(
 ) {
   try {
     // ========================================
-    // Authentication
+    // Authentication & Admin Check
     // ========================================
 
-    const user = await getCurrentUser();
+    const auth = await requireAdmin();
 
-    if (!user) {
+    if (!auth.authorized) {
       return NextResponse.json(
         {
           success: false,
-          message: "Authentication required",
+          message: auth.message,
         },
         {
-          status: 401,
+          status: auth.status,
         }
       );
     }
-
-    // ========================================
-    // Admin Check
-    // ========================================
-
-    if (user.role !== "admin") {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Admin access required",
-        },
-        {
-          status: 403,
-        }
-      );
-    }
-
-    // ========================================
-    // Database
-    // ========================================
-
-    await connectDB();
 
     // ========================================
     // Params
@@ -69,11 +44,11 @@ export async function PATCH(
 
     const { id } = await params;
 
-    if (!id) {
+    if (!id || !isValidObjectId(id)) {
       return NextResponse.json(
         {
           success: false,
-          message: "Order ID is required",
+          message: "Invalid order ID",
         },
         {
           status: 400,
@@ -85,7 +60,33 @@ export async function PATCH(
     // Request Body
     // ========================================
 
-    const body = await req.json();
+    let body: { status?: unknown };
+
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid request body",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid request body",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
     const status = body.status;
 
@@ -105,7 +106,7 @@ export async function PATCH(
       );
     }
 
-    if (!ALLOWED_STATUSES.includes(status)) {
+    if (!isValidOrderStatus(status)) {
       return NextResponse.json(
         {
           success: false,
@@ -118,39 +119,14 @@ export async function PATCH(
     }
 
     // ========================================
-    // Update Order
+    // Database & Centralized Status Update
     // ========================================
 
-    const order =
-      await Order.findByIdAndUpdate(
-        id,
-        {
-          status,
-        },
-        {
-          new: true,
-          runValidators: true,
-        }
-      ).populate(
-        "user",
-        "name email"
-      );
+    await connectDB();
 
-    // ========================================
-    // Order Not Found
-    // ========================================
-
-    if (!order) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Order not found",
-        },
-        {
-          status: 404,
-        }
-      );
-    }
+    const order = await updateOrderStatus(id, status, {
+      populateUser: true,
+    });
 
     // ========================================
     // Response
@@ -167,18 +143,24 @@ export async function PATCH(
       }
     );
   } catch (error) {
-    console.error(
-      "Update Order Error:",
-      error
-    );
+    console.error("Update Order Error:", error);
+
+    if (error instanceof OrderServiceError) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: error.message,
+        },
+        {
+          status: error.statusCode,
+        }
+      );
+    }
 
     return NextResponse.json(
       {
         success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to update order",
+        message: "Failed to update order",
       },
       {
         status: 500,

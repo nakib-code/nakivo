@@ -5,6 +5,7 @@ import "./globals.css";
 
 import QueryProvider from "@/providers/QueryProvider";
 import AuthProvider from "@/providers/AuthProvider";
+import { getWebsiteSettings } from "@/service/settings/website-settings.service";
 
 import { Toaster } from "sonner";
 
@@ -18,13 +19,33 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "E-Commerce",
-    template: "%s | E-Commerce",
-  },
-  description: "Modern Next.js E-Commerce",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { siteName, faviconUrl } = await getWebsiteSettings();
+
+  return {
+    metadataBase: new URL(
+      process.env.NEXT_PUBLIC_BASE_URL || "https://nakivo.vercel.app"
+    ),
+    title: {
+      default: `${siteName} — Online Store`,
+      template: `%s | ${siteName}`,
+    },
+    description: `Shop curated fashion, electronics, and everyday essentials at ${siteName} with fast Cash on Delivery across Bangladesh.`,
+    ...(faviconUrl
+      ? {
+          icons: {
+            icon: faviconUrl,
+            shortcut: faviconUrl,
+            apple: faviconUrl,
+          },
+        }
+      : {}),
+    openGraph: {
+      siteName,
+      type: "website",
+    },
+  };
+}
 
 export default function RootLayout({
   children,

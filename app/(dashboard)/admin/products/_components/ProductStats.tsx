@@ -4,37 +4,28 @@ import {
   Zap,
 } from "lucide-react";
 
-interface Product {
-  _id: string;
-  stock: number;
-  isFeatured: boolean;
-  isFlashSale: boolean;
+export interface ProductStatsSummary {
+  totalProducts: number;
+  inStock: number;
+  outOfStock: number;
+  featuredProducts: number;
+  flashSaleProducts: number;
 }
 
 interface ProductStatsProps {
-  products: Product[];
+  stats: ProductStatsSummary;
 }
 
 export default function ProductStats({
-  products,
+  stats,
 }: ProductStatsProps) {
-  const totalProducts = products.length;
-
-  const inStock = products.filter(
-    (product) => product.stock > 0
-  ).length;
-
-  const outOfStock = products.filter(
-    (product) => product.stock === 0
-  ).length;
-
-  const featuredProducts = products.filter(
-    (product) => product.isFeatured
-  ).length;
-
-  const flashSaleProducts = products.filter(
-    (product) => product.isFlashSale
-  ).length;
+  const {
+    totalProducts,
+    inStock,
+    outOfStock,
+    featuredProducts,
+    flashSaleProducts,
+  } = stats;
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">

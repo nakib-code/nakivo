@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Heart,
   Eye,
@@ -11,7 +12,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { useCartStore } from "@/store/useCartStore";
+import { formatBDT } from "@/lib/currency";
+import { getActiveFlashSalePricing } from "@/lib/flash-sale";
+import { useCartHydrated, useCartStore } from "@/store/useCartStore";
 import { IProduct } from "@/types";
 
 interface ProductCardProps {
@@ -21,18 +24,41 @@ interface ProductCardProps {
 export default function ProductCard({
   product,
 }: ProductCardProps) {
+  const router = useRouter();
+  const hydrated = useCartHydrated();
   const addToCart = useCartStore(
     (state) => state.addToCart
   );
 
-  const image =
-    product.images?.[0]?.url || "/placeholder.png";
+  const image = product.images?.[0]?.url || "";
+  const hasStock = Number(product.stock ?? 0) > 0;
+  const pricing = hydrated
+    ? getActiveFlashSalePricing(product)
+    : {
+        isActive: false,
+        regularPrice: Number(product.price) || 0,
+        effectivePrice: Number(product.price) || 0,
+        discountPercent: 0,
+      };
 
-  const rating = 4.8;
-  const reviewCount = 124;
+  const rating = Number(product.ratings ?? 0);
 
   const handleAddToCart = () => {
-    addToCart(product);
+    if (!hasStock) {
+      toast.error("This product is currently out of stock");
+      return;
+    }
+
+    const result = addToCart(product);
+
+    if (!result.added) {
+      toast.error(
+        result.reason === "max_stock"
+          ? "Maximum available quantity already in cart"
+          : "Unable to add product to cart"
+      );
+      return;
+    }
 
     toast.success(
       `${product.title} added to cart`
@@ -40,9 +66,19 @@ export default function ProductCard({
   };
 
   const handleBuyNow = () => {
-    addToCart(product);
+    if (!hasStock) {
+      toast.error("This product is currently out of stock");
+      return;
+    }
 
-    window.location.href = "/checkout";
+    const result = addToCart(product);
+
+    if (!result.added && result.reason !== "max_stock") {
+      toast.error("Unable to add product to cart");
+      return;
+    }
+
+    router.push("/checkout");
   };
 
   return (
@@ -115,23 +151,29 @@ export default function ProductCard({
               lg:h-72
             "
           >
-            <Image
-              src={image}
-              alt={product.title}
-              fill
-              sizes="
-                (max-width: 640px) 50vw,
-                (max-width: 1024px) 50vw,
-                25vw
-              "
-              className="
-                object-cover
-                transition-transform duration-700
-                ease-out
-                group-hover:scale-105
-                sm:group-hover:scale-110
-              "
-            />
+            {image ? (
+              <Image
+                src={image}
+                alt={product.title}
+                fill
+                sizes="
+                  (max-width: 640px) 50vw,
+                  (max-width: 1024px) 50vw,
+                  25vw
+                "
+                className="
+                  object-cover
+                  transition-transform duration-700
+                  ease-out
+                  group-hover:scale-105
+                  sm:group-hover:scale-110
+                "
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-slate-100 text-xs font-medium text-slate-400">
+                No Image Available
+              </div>
+            )}
           </div>
         </Link>
 
@@ -214,8 +256,8 @@ export default function ProductCard({
         </Link>
 
         {/* Rating */}
-        <div className="flex items-center gap-1.5">
-          <div className="flex items-center gap-0.5">
+        {rating > 0 && (
+          <div className="flex items-center gap-1">
             <Star
               size={12}
               fill="currentColor"
@@ -223,36 +265,34 @@ export default function ProductCard({
             />
 
             <span className="text-[11px] font-semibold text-slate-800 sm:text-sm">
-              {rating}
+              {rating.toFixed(1)}
             </span>
           </div>
-
-          <span className="truncate text-[9px] text-slate-400 sm:text-xs">
-            ({reviewCount})
-          </span>
-        </div>
+        )}
 
         {/* Price */}
-        <div className="flex items-end gap-1.5 sm:gap-3">
+        <div className="flex flex-wrap items-end gap-1.5 sm:gap-2.5">
           <span
-            className="
-              text-lg font-black tracking-tight
-              text-slate-950
-              sm:text-2xl
-            "
+            className={`text-lg font-black tracking-tight sm:text-2xl ${
+              pricing.isActive ? "text-red-600" : "text-slate-950"
+            }`}
           >
-            ${product.price}
+            {formatBDT(pricing.effectivePrice)}
           </span>
 
-          <span
-            className="
-              pb-0.5 text-[10px]
-              text-slate-400 line-through
-              sm:text-sm
-            "
-          >
-            ${(product.price * 1.25).toFixed(0)}
-          </span>
+          {pricing.isActive && (
+            <>
+              <span className="pb-0.5 text-[10px] text-slate-400 line-through sm:text-sm">
+                {formatBDT(pricing.regularPrice)}
+              </span>
+
+              {pricing.discountPercent > 0 && (
+                <span className="mb-0.5 rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-bold text-red-600 sm:text-[11px]">
+                  -{pricing.discountPercent}%
+                </span>
+              )}
+            </>
+          )}
         </div>
 
         {/* ================= BUTTONS ================= */}
@@ -260,6 +300,7 @@ export default function ProductCard({
           {/* Buy Now */}
           <button
             type="button"
+            disabled={!hasStock}
             onClick={handleBuyNow}
             className="
               flex min-w-0 items-center
@@ -272,6 +313,10 @@ export default function ProductCard({
               hover:bg-slate-800
               hover:shadow-lg
               active:scale-[0.97]
+              disabled:cursor-not-allowed
+              disabled:bg-slate-300
+              disabled:text-slate-600
+              disabled:hover:shadow-none
               sm:gap-2
               sm:rounded-xl
               sm:px-4 sm:py-3.5
@@ -284,13 +329,14 @@ export default function ProductCard({
             />
 
             <span className="truncate">
-              Buy Now
+              {hasStock ? "Buy Now" : "Out of Stock"}
             </span>
           </button>
 
           {/* Add To Cart */}
           <button
             type="button"
+            disabled={!hasStock}
             onClick={handleAddToCart}
             className="
               flex min-w-0 items-center
@@ -305,6 +351,9 @@ export default function ProductCard({
               hover:bg-slate-100
               hover:shadow-md
               active:scale-[0.97]
+              disabled:cursor-not-allowed
+              disabled:opacity-50
+              disabled:hover:shadow-none
               sm:gap-2
               sm:rounded-xl
               sm:px-4 sm:py-3.5
@@ -317,7 +366,7 @@ export default function ProductCard({
             />
 
             <span className="truncate">
-              Add to Cart
+              {hasStock ? "Add to Cart" : "Unavailable"}
             </span>
           </button>
         </div>

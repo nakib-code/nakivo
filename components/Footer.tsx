@@ -1,15 +1,11 @@
+import Image from "next/image";
 import Link from "next/link";
 import {
-  Facebook,
-  Instagram,
-  Twitter,
-  Github,
   Mail,
   MapPin,
   Phone,
   ArrowUpRight,
 } from "lucide-react";
-import type { ReactNode } from "react";
 
 const shopLinks = [
   { label: "All Products", href: "/products" },
@@ -27,35 +23,22 @@ const supportLinks = [
 
 const companyLinks = [
   { label: "About Us", href: "/about" },
-  { label: "Privacy Policy", href: "/privacy" },
-  { label: "Terms & Conditions", href: "/terms" },
-  { label: "Return Policy", href: "/return-policy" },
+  { label: "Shop All", href: "/products" },
+  { label: "Contact Support", href: "/contact" },
 ];
 
-const socialLinks = [
-  {
-    label: "Facebook",
-    href: "#",
-    icon: Facebook,
-  },
-  {
-    label: "Instagram",
-    href: "#",
-    icon: Instagram,
-  },
-  {
-    label: "Twitter",
-    href: "#",
-    icon: Twitter,
-  },
-  {
-    label: "GitHub",
-    href: "#",
-    icon: Github,
-  },
-];
+interface FooterProps {
+  siteName?: string;
+  logoUrl?: string;
+}
 
-export default function Footer() {
+export default function Footer({
+  siteName = "NAKIVO",
+  logoUrl = "",
+}: FooterProps) {
+  const displayName = siteName.trim() || "NAKIVO";
+  const initial = displayName.charAt(0).toUpperCase();
+
   return (
     <footer className="border-t border-white/10 bg-slate-950 text-white">
       <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 xl:px-10">
@@ -65,15 +48,27 @@ export default function Footer() {
           <div className="lg:col-span-2">
             <Link
               href="/"
-              aria-label="Bagddash home"
+              aria-label={`${displayName} home`}
               className="group inline-flex items-center gap-3"
             >
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-lg font-black text-slate-950 transition-transform duration-300 group-hover:rotate-3">
-                B
-              </span>
+              {logoUrl ? (
+                <span className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1 transition-transform duration-300 group-hover:rotate-3">
+                  <Image
+                    src={logoUrl}
+                    alt={displayName}
+                    fill
+                    sizes="44px"
+                    className="object-contain p-1"
+                  />
+                </span>
+              ) : (
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-lg font-black text-slate-950 transition-transform duration-300 group-hover:rotate-3">
+                  {initial}
+                </span>
+              )}
 
               <span className="text-2xl font-black tracking-tight">
-                Bagddash
+                {displayName}
                 <span className="text-slate-400">.</span>
               </span>
             </Link>
@@ -87,23 +82,23 @@ export default function Footer() {
             {/* Contact Information */}
             <div className="mt-6 space-y-4">
               <a
-                href="mailto:support@bagddash.com"
+                href="mailto:support@nakivo.com"
                 className="group flex w-fit items-center gap-3 text-sm text-slate-400 transition-colors hover:text-white"
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 transition-colors group-hover:bg-white group-hover:text-slate-950">
                   <Mail size={16} />
                 </span>
-                support@bagddash.com
+                support@nakivo.com
               </a>
 
               <a
-                href="tel:+8801XXXXXXXXX"
+                href="tel:+8801856682104"
                 className="group flex w-fit items-center gap-3 text-sm text-slate-400 transition-colors hover:text-white"
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 transition-colors group-hover:bg-white group-hover:text-slate-950">
                   <Phone size={16} />
                 </span>
-                +880 1XXX-XXXXXX
+                +880 1856-682104
               </a>
 
               <div className="flex items-center gap-3 text-sm text-slate-400">
@@ -112,22 +107,6 @@ export default function Footer() {
                 </span>
                 Dhaka, Bangladesh
               </div>
-            </div>
-
-            {/* Social Links */}
-            <div className="mt-7 flex items-center gap-3">
-              {socialLinks.map(({ label, href, icon: Icon }) => (
-                <a
-                  key={label}
-                  href={href}
-                  aria-label={label}
-                  target={href.startsWith("http") ? "_blank" : undefined}
-                  rel={href.startsWith("http") ? "noreferrer" : undefined}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-400 transition-all duration-300 hover:-translate-y-1 hover:border-white hover:bg-white hover:text-slate-950"
-                >
-                  <Icon size={17} strokeWidth={1.8} />
-                </a>
-              ))}
             </div>
           </div>
 
@@ -162,22 +141,22 @@ export default function Footer() {
         {/* Bottom Footer */}
         <div className="flex flex-col gap-4 border-t border-white/10 py-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <p>
-            © {new Date().getFullYear()} Bagddash. All rights reserved.
+            © {new Date().getFullYear()} {displayName}. All rights reserved.
           </p>
 
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
             <Link
-              href="/privacy"
+              href="/about"
               className="transition-colors hover:text-white"
             >
-              Privacy
+              About
             </Link>
 
             <Link
-              href="/terms"
+              href="/products"
               className="transition-colors hover:text-white"
             >
-              Terms
+              Shop
             </Link>
 
             <Link

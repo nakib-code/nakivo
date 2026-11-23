@@ -10,31 +10,8 @@ export function useCategories() {
 
     queryKey: ["categories"],
 
-    queryFn: async()=>{
-
-      try {
-
-        const data = await getCategories();
-
-        console.log(
-          "Categories:",
-          data
-        );
-
-        return data;
-
-
-      } catch(error){
-
-        console.error(
-          "Category Error:",
-          error
-        );
-
-        throw error;
-
-      }
-
+    queryFn: async () => {
+      return getCategories();
     },
 
   });

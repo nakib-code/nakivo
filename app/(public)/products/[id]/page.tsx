@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { isValidObjectId } from "mongoose";
 import {
   ArrowLeft,
   Check,
@@ -7,9 +9,12 @@ import {
 } from "lucide-react";
 
 import connectDB from "@/lib/db";
+import { formatBDT } from "@/lib/currency";
+import { getActiveFlashSalePricing } from "@/lib/flash-sale";
 import Product from "@/models/Product";
 
 import ProductDetailsActions from "./ProductDetailsActions";
+import ProductImageGallery from "./ProductImageGallery";
 
 // ========================================
 // TYPES
@@ -21,14 +26,66 @@ interface ProductDetailsPageProps {
   }>;
 }
 
+function getProductPricing(product: {
+  price: number;
+  isFlashSale: boolean;
+  flashSalePrice?: number;
+  flashSaleStart?: Date;
+  flashSaleEnd?: Date;
+}) {
+  const pricing = getActiveFlashSalePricing(product);
+
+  return {
+    hasActiveFlashSale: pricing.isActive,
+    activePrice: pricing.effectivePrice,
+    discountPercent: pricing.discountPercent,
+  };
+}
+
 // ========================================
 // PAGE
 // ========================================
+
+export async function generateMetadata({
+  params,
+}: ProductDetailsPageProps): Promise<Metadata> {
+  const { id } = await params;
+
+  if (!isValidObjectId(id)) {
+    return { title: "Product Not Found" };
+  }
+
+  await connectDB();
+  const product = await Product.findById(id)
+    .select("title description images")
+    .lean();
+
+  if (!product) {
+    return { title: "Product Not Found" };
+  }
+
+  const description = product.description?.slice(0, 160) || "";
+  const image = product.images?.[0]?.url;
+
+  return {
+    title: product.title,
+    description,
+    openGraph: {
+      title: product.title,
+      description,
+      ...(image ? { images: [{ url: image }] } : {}),
+    },
+  };
+}
 
 export default async function ProductDetailsPage({
   params,
 }: ProductDetailsPageProps) {
   const { id } = await params;
+
+  if (!isValidObjectId(id)) {
+    notFound();
+  }
 
   // ========================================
   // DATABASE
@@ -89,19 +146,19 @@ const serializedProduct = {
   ),
 };
 
+  const { hasActiveFlashSale, activePrice } =
+    getProductPricing(serializedProduct);
+
   // ========================================
   // MAIN IMAGE
   // ========================================
-
-  const mainImage =
-    serializedProduct.images[0]?.url || "";
 
   // ========================================
   // PAGE
   // ========================================
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50">
       <div
         className="
           mx-auto
@@ -144,98 +201,10 @@ const serializedProduct = {
               PRODUCT IMAGES
           ======================================== */}
 
-          <div
-            className="
-              rounded-2xl
-              border
-              bg-white
-              p-3
-              shadow-sm
-            "
-          >
-            {/* Main Image */}
-
-            <div
-              className="
-                relative
-                aspect-square
-                overflow-hidden
-                rounded-xl
-                bg-slate-100
-              "
-            >
-              {mainImage ? (
-                <img
-                  src={mainImage}
-                  alt={serializedProduct.title}
-                  className="
-                    h-full
-                    w-full
-                    object-cover
-                  "
-                />
-              ) : (
-                <div
-                  className="
-                    flex
-                    h-full
-                    items-center
-                    justify-center
-                    text-sm
-                    text-slate-400
-                  "
-                >
-                  No Image Available
-                </div>
-              )}
-            </div>
-
-            {/* Image Thumbnails */}
-
-            {serializedProduct.images.length >
-              1 && (
-              <div
-                className="
-                  mt-3
-                  grid
-                  grid-cols-5
-                  gap-3
-                "
-              >
-                {serializedProduct.images.map(
-                  (image, index) => (
-                    <div
-                      key={
-                        image.publicId ||
-                        `${image.url}-${index}`
-                      }
-                      className="
-                        aspect-square
-                        overflow-hidden
-                        rounded-lg
-                        border
-                        bg-slate-100
-                      "
-                    >
-                      {image.url && (
-                        <img
-                          src={image.url}
-                          alt={`${serializedProduct.title} ${
-                            index + 1
-                          }`}
-                          className="
-                            h-full
-                            w-full
-                            object-cover
-                          "
-                        />
-                      )}
-                    </div>
-                  )
-                )}
-              </div>
-            )}
-          </div>
+          <ProductImageGallery
+            images={serializedProduct.images}
+            title={serializedProduct.title}
+          />
 
           {/* ========================================
               PRODUCT INFORMATION
@@ -323,19 +292,20 @@ const serializedProduct = {
 
             {/* Price */}
 
-            <div className="mt-6">
+            <div className="mt-6 flex items-baseline gap-3">
               <span
-                className="
-                  text-3xl
-                  font-bold
-                  text-slate-950
-                "
+                className={`text-3xl font-bold ${
+                  hasActiveFlashSale ? "text-red-600" : "text-slate-950"
+                }`}
               >
-                $
-                {serializedProduct.price.toFixed(
-                  2
-                )}
+                {formatBDT(activePrice)}
               </span>
+
+              {hasActiveFlashSale && (
+                <span className="text-lg text-slate-400 line-through">
+                  {formatBDT(serializedProduct.price)}
+                </span>
+              )}
             </div>
 
             {/* Divider */}
@@ -405,10 +375,11 @@ const serializedProduct = {
 
             <ProductDetailsActions
               product={serializedProduct}
+              activePrice={activePrice}
             />
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

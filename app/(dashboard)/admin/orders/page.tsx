@@ -1,26 +1,25 @@
 
 "use client";
 
-import { useState } from "react";
+import Image from "next/image";
+import { useEffect, useState } from "react";
 import {
   CalendarDays,
   Copy,
-  Mail,
   MapPin,
   Package,
-  Phone,
   User,
   X,
   Eye,
   ShoppingBag,
   CheckCircle2,
   Clock3,
-  Truck,
   XCircle,
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { formatBDT } from "@/lib/currency";
 import {
   useOrders,
   useUpdateOrderStatus,
@@ -56,20 +55,21 @@ type Order = {
     image?: string;
     price?: number;
     quantity?: number;
-    product?: any;
+    product?:
+      | string
+      | {
+          _id?: string;
+          title?: string;
+          price?: number;
+          images?: Array<{ url?: string }>;
+        }
+      | null;
   }>;
   paymentMethod?: string;
   subtotal?: number;
   deliveryCharge?: number;
   totalPrice?: number;
 };
-
-function formatBDT(amount: number) {
-  return `৳${Number(amount || 0).toLocaleString("en-BD", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
 
 function formatDate(date: string) {
   if (!date) return "N/A";
@@ -189,6 +189,19 @@ export default function AdminOrdersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
 
+  useEffect(() => {
+    if (!selectedOrder) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedOrder(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedOrder]);
+
   const handleStatusChange = (
     orderId: string,
     status: OrderStatus
@@ -196,12 +209,19 @@ export default function AdminOrdersPage() {
     updateStatusMutation.mutate(
       { id: orderId, status },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
           toast.success("Order status updated successfully");
 
           setSelectedOrder((current) =>
             current?._id === orderId
-              ? { ...current, status }
+              ? {
+                  ...current,
+                  status: result.data?.status ?? status,
+                  isPaid:
+                    typeof result.data?.isPaid === "boolean"
+                      ? result.data.isPaid
+                      : current.isPaid,
+                }
               : current
           );
         },
@@ -413,16 +433,7 @@ export default function AdminOrdersPage() {
                   <tr
                     key={order._id}
                     onClick={() => setSelectedOrder(order)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setSelectedOrder(order);
-                      }
-                    }}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`View order ${order._id}`}
-                    className="cursor-pointer transition hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                    className="cursor-pointer transition hover:bg-muted/30"
                   >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2.5">
@@ -642,24 +653,34 @@ export default function AdminOrdersPage() {
 
                 <div className="divide-y rounded-xl border">
                   {selectedOrder.orderItems?.map((item, index) => {
+                    const populatedProduct =
+                      item.product && typeof item.product === "object"
+                        ? item.product
+                        : null;
+
                     const image =
-                      item.image || item.product?.images?.[0]?.url || "";
+                      item.image || populatedProduct?.images?.[0]?.url || "";
+
+                    const productKey =
+                      populatedProduct?._id ||
+                      (typeof item.product === "string" ? item.product : "");
 
                     const quantity = Number(item.quantity ?? 0);
                     const price = Number(item.price ?? 0);
 
                     return (
                       <div
-                        key={`${selectedOrder._id}-${item._id || item.product?._id || item.product || index}`}
+                        key={`${selectedOrder._id}-${item._id || productKey || index}`}
                         className="flex items-center gap-3 p-3 sm:gap-4 sm:p-4"
                       >
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
+                        <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
                           {image ? (
-                            <img
+                            <Image
                               src={image}
                               alt={item.title || "Product"}
-                              loading="lazy"
-                              className="h-full w-full object-cover"
+                              fill
+                              sizes="56px"
+                              className="object-cover"
                             />
                           ) : (
                             <Package className="h-6 w-6 text-muted-foreground" />
@@ -770,7 +791,7 @@ export default function AdminOrdersPage() {
                 <div>
                   <h3 className="font-semibold">Update Order Status</h3>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Changes are saved through your existing API hook.
+                    Updating status saves immediately to the order record.
                   </p>
                 </div>
 

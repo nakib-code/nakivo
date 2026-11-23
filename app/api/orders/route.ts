@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isValidObjectId, startSession } from "mongoose";
+import { isValidObjectId, type ClientSession } from "mongoose";
 
 import connectDB from "@/lib/db";
+import { formatBDT } from "@/lib/currency";
+import {
+  calculateDeliveryDetails,
+  normalizeDeliverySettings,
+} from "@/lib/delivery";
+import { getActiveFlashSalePricing } from "@/lib/flash-sale";
 import { getCurrentUser } from "@/lib/auth";
+import {
+  OrderServiceError,
+  runWithTransactionOrFallback,
+} from "@/service/order/order.service";
 
 import Order from "@/models/Order";
 import Product from "@/models/Product";
@@ -50,39 +60,11 @@ function getActiveProductPrice(product: {
   flashSaleStart?: Date | string;
   flashSaleEnd?: Date | string;
 }) {
-  const regularPrice = Number(product.price);
-
-  if (!Number.isFinite(regularPrice) || regularPrice <= 0) {
-    return { price: 0, isFlashSale: false };
-  }
-
-  if (
-    !product.isFlashSale ||
-    product.flashSalePrice == null ||
-    !product.flashSaleStart ||
-    !product.flashSaleEnd
-  ) {
-    return { price: regularPrice, isFlashSale: false };
-  }
-
-  const now = Date.now();
-  const start = new Date(product.flashSaleStart).getTime();
-  const end = new Date(product.flashSaleEnd).getTime();
-  const flashPrice = Number(product.flashSalePrice);
-
-  const isActive =
-    Number.isFinite(start) &&
-    Number.isFinite(end) &&
-    Number.isFinite(flashPrice) &&
-    start <= now &&
-    now <= end &&
-    start <= end &&
-    flashPrice > 0 &&
-    flashPrice < regularPrice;
-
-  return isActive
-    ? { price: flashPrice, isFlashSale: true }
-    : { price: regularPrice, isFlashSale: false };
+  const pricing = getActiveFlashSalePricing(product);
+  return {
+    price: pricing.effectivePrice,
+    isFlashSale: pricing.isActive,
+  };
 }
 
 // ==================================================
@@ -90,8 +72,6 @@ function getActiveProductPrice(product: {
 // ==================================================
 
 export async function POST(req: NextRequest) {
-  let session: Awaited<ReturnType<typeof startSession>> | undefined;
-
   try {
     // Authentication
     const user = await getCurrentUser();
@@ -112,6 +92,10 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json();
     } catch {
+      return errorResponse("Invalid request body.");
+    }
+
+    if (!body || typeof body !== "object") {
       return errorResponse("Invalid request body.");
     }
 
@@ -209,73 +193,49 @@ export async function POST(req: NextRequest) {
       quantities.set(productId, combinedQuantity);
     }
 
-    // Read delivery settings from the database.
-    // The settings document must already exist.
-    const settings = await StoreSettings.findOne().lean();
+    // Read delivery settings from the database with safe fallback defaults.
+    // Never trust delivery charges sent from the client.
+    const rawSettings = await StoreSettings.findOne({ key: "store" }).lean();
+    const deliverySettings = normalizeDeliverySettings(rawSettings);
 
-    if (!settings) {
-      console.error("Store delivery settings are not configured.");
-
-      return errorResponse(
-        "Delivery settings are not configured. Please contact the store.",
-        500
-      );
-    }
-
-    const insideCharge = Number(settings.insideDhakaCharge);
-    const outsideCharge = Number(settings.outsideDhakaCharge);
-    const freeThreshold = Number(settings.freeDeliveryThreshold);
-
-    if (
-      !Number.isFinite(insideCharge) ||
-      insideCharge < 0 ||
-      !Number.isFinite(outsideCharge) ||
-      outsideCharge < 0
-    ) {
-      console.error("Invalid delivery charges in store settings.");
-
-      return errorResponse(
-        "Delivery settings are invalid. Please contact the store.",
-        500
-      );
-    }
-
-    // Start a transaction for order creation and stock changes.
-    session = await startSession();
-
-    let createdOrder: unknown;
-
-    await session.withTransaction(async () => {
+    const executeOrderCreation = async (session?: ClientSession) => {
       const orderItems: OrderItemSnapshot[] = [];
       let subtotal = 0;
 
-      // Read the current product and price from the server.
+      // Read current products and calculate authoritative server prices.
       for (const [productId, quantity] of quantities.entries()) {
-        const product = await Product.findById(productId).session(
-          session!
-        );
+        const productQuery = Product.findById(productId);
+        if (session) {
+          productQuery.session(session);
+        }
+        const product = await productQuery;
 
         if (!product) {
-          throw new Error("ORDER_PRODUCT_NOT_FOUND");
+          throw new OrderServiceError(
+            "One of the selected products was not found.",
+            404
+          );
         }
 
         if (
           !Number.isSafeInteger(product.stock) ||
           product.stock < quantity
         ) {
-          throw new Error(
-            `ORDER_INSUFFICIENT_STOCK:${product.title}:${Math.max(
+          throw new OrderServiceError(
+            `${product.title} has only ${Math.max(
               0,
               Number(product.stock) || 0
-            )}`
+            )} items available.`,
+            400
           );
         }
 
         const { price } = getActiveProductPrice(product);
 
         if (!Number.isFinite(price) || price <= 0) {
-          throw new Error(
-            `ORDER_INVALID_PRICE:${product.title}`
+          throw new OrderServiceError(
+            `Invalid price for ${product.title}.`,
+            400
           );
         }
 
@@ -291,74 +251,111 @@ export async function POST(req: NextRequest) {
       }
 
       if (!Number.isFinite(subtotal) || subtotal <= 0) {
-        throw new Error("ORDER_INVALID_TOTAL");
+        throw new OrderServiceError(
+          "Unable to calculate the order total.",
+          400
+        );
       }
 
-      // Calculate delivery charge on the server.
-      const freeDeliveryEnabled =
-        settings.freeDeliveryEnabled === true;
+      // Enforce minimum order amount and calculate delivery charge strictly on the server.
+      const deliveryDetails = calculateDeliveryDetails(
+        subtotal,
+        deliveryArea,
+        deliverySettings
+      );
 
-      const qualifiesForFreeDelivery =
-        freeDeliveryEnabled &&
-        Number.isFinite(freeThreshold) &&
-        freeThreshold >= 0 &&
-        subtotal >= freeThreshold;
+      if (!deliveryDetails.meetsMinimumOrder) {
+        throw new OrderServiceError(
+          `Minimum order amount is ${formatBDT(
+            deliverySettings.minimumOrderAmount
+          )}.`,
+          400
+        );
+      }
 
-      const deliveryCharge = qualifiesForFreeDelivery
-        ? 0
-        : deliveryArea === "INSIDE_DHAKA"
-          ? insideCharge
-          : outsideCharge;
-
+      const deliveryCharge = deliveryDetails.deliveryCharge;
       const totalPrice = subtotal + deliveryCharge;
 
       if (!Number.isFinite(totalPrice) || totalPrice <= 0) {
-        throw new Error("ORDER_INVALID_TOTAL");
+        throw new OrderServiceError(
+          "Unable to calculate the order total.",
+          400
+        );
       }
 
       // Atomically decrease stock only if enough stock remains.
-      // A failed update aborts the transaction.
-      for (const item of orderItems) {
-        const result = await Product.updateOne(
-          {
-            _id: item.product,
-            stock: { $gte: item.quantity },
-          },
-          {
-            $inc: { stock: -item.quantity },
-          },
-          { session }
-        );
+      // In non-transactional fallback mode, compensate already-deducted items on failure.
+      const deductedItems: Array<{ product: unknown; quantity: number }> = [];
 
-        if (result.modifiedCount !== 1) {
-          throw new Error("ORDER_STOCK_CHANGED");
-        }
-      }
-
-      const [order] = await Order.create(
-        [
-          {
-            user: user.id,
-            orderItems,
-            shippingAddress: {
-              address,
-              city,
-              phone,
-              deliveryArea,
+      try {
+        for (const item of orderItems) {
+          const result = await Product.updateOne(
+            {
+              _id: item.product,
+              stock: { $gte: item.quantity },
             },
-            paymentMethod: "COD",
-            subtotal,
-            deliveryCharge,
-            totalPrice,
-            isPaid: false,
-            status: "Pending",
-          },
-        ],
-        { session }
-      );
+            {
+              $inc: { stock: -item.quantity },
+            },
+            session ? { session } : undefined
+          );
 
-      createdOrder = order;
-    });
+          if (result.modifiedCount !== 1) {
+            throw new OrderServiceError(
+              "Product stock changed during checkout. Please try again.",
+              409
+            );
+          }
+
+          deductedItems.push({
+            product: item.product,
+            quantity: item.quantity,
+          });
+        }
+
+        const orderPayload = {
+          user: user.id,
+          orderItems,
+          shippingAddress: {
+            address,
+            city,
+            phone,
+            deliveryArea,
+          },
+          paymentMethod: "COD" as const,
+          subtotal,
+          deliveryCharge,
+          totalPrice,
+          isPaid: false,
+          status: "Pending" as const,
+        };
+
+        if (session) {
+          const [order] = await Order.create([orderPayload], { session });
+          return order;
+        }
+
+        return await Order.create(orderPayload);
+      } catch (err) {
+        if (!session && deductedItems.length > 0) {
+          await Promise.allSettled(
+            deductedItems.map((deducted) =>
+              Product.updateOne(
+                { _id: deducted.product },
+                { $inc: { stock: deducted.quantity } }
+              )
+            )
+          );
+        }
+
+        throw err;
+      }
+    };
+
+    const createdOrder = await runWithTransactionOrFallback(
+      (session) => executeOrderCreation(session),
+      () => executeOrderCreation(undefined)
+    );
 
     return NextResponse.json(
       {
@@ -371,54 +368,14 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("POST Order Error:", error);
 
-    if (error instanceof Error) {
-      if (error.message === "ORDER_PRODUCT_NOT_FOUND") {
-        return errorResponse(
-          "One of the selected products was not found.",
-          404
-        );
-      }
-
-      if (error.message.startsWith("ORDER_INSUFFICIENT_STOCK:")) {
-        const [, title, stock] = error.message.split(":");
-
-        return errorResponse(
-          `${title} has only ${stock} items available.`,
-          400
-        );
-      }
-
-      if (error.message.startsWith("ORDER_INVALID_PRICE:")) {
-        const title = error.message.split(":")[1];
-
-        return errorResponse(
-          `Invalid price for ${title}.`,
-          400
-        );
-      }
-
-      if (
-        error.message === "ORDER_INVALID_TOTAL"
-      ) {
-        return errorResponse("Unable to calculate the order total.", 400);
-      }
-
-      if (error.message === "ORDER_STOCK_CHANGED") {
-        return errorResponse(
-          "Product stock changed during checkout. Please try again.",
-          409
-        );
-      }
+    if (error instanceof OrderServiceError) {
+      return errorResponse(error.message, error.statusCode);
     }
 
     return errorResponse(
       "Failed to create order. Please try again.",
       500
     );
-  } finally {
-    if (session) {
-      await session.endSession();
-    }
   }
 }
 
@@ -428,7 +385,7 @@ export async function POST(req: NextRequest) {
 // Customer: own orders only
 // ==================================================
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser();
 
@@ -438,25 +395,53 @@ export async function GET() {
 
     await connectDB();
 
+    const { searchParams } = new URL(req.url);
+    const parsedPage = Number(searchParams.get("page"));
+    const page =
+      Number.isFinite(parsedPage) && parsedPage >= 1
+        ? Math.floor(parsedPage)
+        : 1;
+    const parsedLimit = Number(searchParams.get("limit"));
+    const limit =
+      Number.isFinite(parsedLimit) && parsedLimit >= 1
+        ? Math.min(Math.floor(parsedLimit), 100)
+        : 50;
+    const skip = (page - 1) * limit;
+
     const isAdmin = user.role?.toLowerCase() === "admin";
 
     const query = isAdmin
       ? {}
       : { user: user.id };
 
-    const orders = await Order.find(query)
-      .populate("user", "name email image")
-      .populate(
-        "orderItems.product",
-        "title price images isFlashSale flashSalePrice flashSaleStart flashSaleEnd"
-      )
-      .sort({ createdAt: -1 })
-      .lean();
+    const [total, orders] = await Promise.all([
+      Order.countDocuments(query),
+      Order.find(query)
+        .populate("user", "name email image")
+        .populate(
+          "orderItems.product",
+          "title price images isFlashSale flashSalePrice flashSaleStart flashSaleEnd"
+        )
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
 
     return NextResponse.json(
       {
         success: true,
         data: orders,
+        pagination: {
+          currentPage: page,
+          limit,
+          total,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
+        },
       },
       { status: 200 }
     );

@@ -9,6 +9,8 @@ export interface IHeroBanner extends Document {
 
   image: string;
 
+  imagePublicId?: string;
+
   buttonText: string;
 
   buttonLink: string;
@@ -46,6 +48,11 @@ const HeroBannerSchema = new Schema<IHeroBanner>(
     required:true,
   },
 
+  imagePublicId:{
+    type:String,
+    default:"",
+  },
+
 
   buttonText:{
     type:String,
@@ -79,6 +86,8 @@ const HeroBannerSchema = new Schema<IHeroBanner>(
 );
 
 
+
+HeroBannerSchema.index({ active: 1, order: 1 });
 
 const HeroBanner: Model<IHeroBanner> =
 mongoose.models.HeroBanner ||

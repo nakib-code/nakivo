@@ -1,4 +1,13 @@
+import type { Metadata } from "next";
+
 import ProductListing from "@/components/products/ProductListing";
+import { getProducts } from "@/service/product.service";
+
+export const metadata: Metadata = {
+  title: "Shop All Products",
+  description:
+    "Browse all products, categories, new arrivals, and flash sale deals.",
+};
 
 interface ProductsPageProps {
   searchParams: Promise<{
@@ -8,96 +17,20 @@ interface ProductsPageProps {
   }>;
 }
 
-async function getProducts(
-  search?: string,
-  category?: string,
-  sort?: string
-) {
-  const params = new URLSearchParams();
-
-  // Search
-  if (search) {
-    params.set("search", search);
-  }
-
-  // Category
-  if (category && category !== "all") {
-    params.set("category", category);
-  }
-
-  // Sort
-  if (sort) {
-    params.set("sort", sort);
-  }
-
-  const baseUrl =
-    process.env.NEXT_PUBLIC_BASE_URL ||
-    "http://localhost:3000";
-
-  const queryString = params.toString();
-
-  const url = queryString
-    ? `${baseUrl}/api/products?${queryString}`
-    : `${baseUrl}/api/products`;
-
-  const response = await fetch(url, {
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch products");
-  }
-
-  const result = await response.json();
-
-  return Array.isArray(result.data) ? result.data : [];
-}
-
 export default async function ProductsPage({
   searchParams,
 }: ProductsPageProps) {
   const params = await searchParams;
 
-  const isNewArrivals = params.sort === "newest";
-  const isDeals = params.sort === "deals";
-
-  const products = await getProducts(
-    params.search,
-    params.category,
-    params.sort
-  );
-
-  // Page content
-
-  const pageTitle = isNewArrivals
-    ? "New Arrivals"
-    : isDeals
-      ? "Deals"
-      : params.category &&
-          params.category !== "all"
-        ? params.category
-        : "Shop";
-
-  const eyebrow = isNewArrivals
-    ? "Just In"
-    : isDeals
-      ? "Special Offers"
-      : params.category &&
-          params.category !== "all"
-        ? "Category"
-        : "Explore";
-
-  const description = isNewArrivals
-    ? "Discover the latest products recently added to our collection."
-    : isDeals
-      ? "Grab our best offers and limited-time deals before they're gone."
-      : params.category &&
-          params.category !== "all"
-        ? `Explore our ${params.category} collection and find the products you love.`
-        : "Discover quality products selected for style, performance, and everyday value.";
+  const products = await getProducts({
+    search: params.search,
+    category: params.category,
+    sort: params.sort,
+    limit: 24,
+  });
 
   return (
-    <main
+    <div
       className="
         mx-auto
         w-full
@@ -109,12 +42,12 @@ export default async function ProductsPage({
         2xl:px-12
       "
     >
-
       <ProductListing
         products={products}
         initialSearch={params.search || ""}
         initialCategory={params.category || "all"}
+        initialSort={params.sort || "default"}
       />
-    </main>
+    </div>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   ArrowLeft,
   Minus,
@@ -9,33 +10,88 @@ import {
   ShoppingBag,
   Trash2,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { useCartStore } from "@/store/useCartStore";
+import { formatBDT } from "@/lib/currency";
+import { useCartHydrated, useCartStore } from "@/store/useCartStore";
+import type { IProduct } from "@/types";
 
 export default function CartPage() {
   const {
     cart,
     removeFromCart,
     updateQuantity,
+    syncCartWithProducts,
+    getTotalItems,
     getTotalPrice,
     clearCart,
   } = useCartStore();
 
-  const [mounted, setMounted] = useState(false);
+  const mounted = useCartHydrated();
+  const cartIdsKey = cart.map((item) => item._id).join(",");
 
+  // Validate persisted cart prices and stock against the database
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    if (!mounted || !cartIdsKey) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function validateCart() {
+      try {
+        const res = await fetch(
+          `/api/products?ids=${encodeURIComponent(cartIdsKey)}`,
+          { cache: "no-store" }
+        );
+
+        if (!res.ok) {
+          return;
+        }
+
+        const json = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          data?: IProduct[];
+        } | null;
+
+        if (!cancelled && json?.success && Array.isArray(json.data)) {
+          const { removedCount, updatedCount } = syncCartWithProducts(
+            json.data
+          );
+
+          if (removedCount > 0) {
+            toast.info(
+              `${removedCount} out-of-stock or unavailable ${
+                removedCount === 1 ? "item was" : "items were"
+              } removed from your cart.`
+            );
+          } else if (updatedCount > 0) {
+            toast.info(
+              "Your cart was updated to reflect the latest prices and stock."
+            );
+          }
+        }
+      } catch {
+        // Keep existing cart visible if validation request fails transiently
+      }
+    }
+
+    void validateCart();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mounted, cartIdsKey, syncCartWithProducts]);
 
   if (!mounted) {
-    return <main className="min-h-screen bg-slate-50" />;
+    return <div className="min-h-screen bg-slate-50" />;
   }
 
   const totalPrice = getTotalPrice();
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-7xl px-3 py-6 sm:px-6 sm:py-8 lg:px-8">
         {/* Header */}
         <div className="mb-6 sm:mb-8">
@@ -56,8 +112,8 @@ export default function CartPage() {
               </h1>
 
               <p className="mt-0.5 text-xs text-slate-500 sm:mt-1 sm:text-sm">
-                {cart.length} {cart.length === 1 ? "item" : "items"} in your
-                cart
+                {getTotalItems()}{" "}
+                {getTotalItems() === 1 ? "item" : "items"} in your cart
               </p>
             </div>
           </div>
@@ -75,7 +131,7 @@ export default function CartPage() {
             </h2>
 
             <p className="mx-auto mt-2 max-w-sm text-xs text-slate-500 sm:text-sm">
-              Looks like you haven't added anything to your cart yet.
+              Looks like you haven&apos;t added anything to your cart yet.
             </p>
 
             <Button asChild className="mt-5 sm:mt-6">
@@ -87,7 +143,7 @@ export default function CartPage() {
             {/* Cart Items */}
             <div className="space-y-3 sm:space-y-4 lg:col-span-2">
               {cart.map((item) => {
-                const image = item.image || "/placeholder.png";
+                const image = item.image || "";
 
                 return (
                   <div
@@ -100,12 +156,20 @@ export default function CartPage() {
                         href={`/products/${item._id}`}
                         className="shrink-0"
                       >
-                        <div className="h-20 w-20 overflow-hidden rounded-lg bg-slate-100 sm:h-24 sm:w-24 sm:rounded-xl">
-                          <img
-                            src={image}
-                            alt={item.title}
-                            className="h-full w-full object-cover"
-                          />
+                        <div className="relative h-20 w-20 overflow-hidden rounded-lg bg-slate-100 sm:h-24 sm:w-24 sm:rounded-xl">
+                          {image ? (
+                            <Image
+                              src={image}
+                              alt={item.title}
+                              fill
+                              sizes="96px"
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-400">
+                              No image
+                            </div>
+                          )}
                         </div>
                       </Link>
 
@@ -119,8 +183,24 @@ export default function CartPage() {
                               </h3>
                             </Link>
 
-                            <p className="mt-1 text-xs text-slate-500 sm:text-sm">
-                              ${item.price.toFixed(2)} per item
+                            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500 sm:text-sm">
+                              <span
+                                className={
+                                  item.isFlashSale
+                                    ? "font-semibold text-red-600"
+                                    : undefined
+                                }
+                              >
+                                {formatBDT(item.price)}
+                              </span>
+                              {item.isFlashSale &&
+                                typeof item.regularPrice === "number" &&
+                                item.regularPrice > item.price && (
+                                  <span className="text-slate-400 line-through">
+                                    {formatBDT(item.regularPrice)}
+                                  </span>
+                                )}
+                              <span>per item</span>
                             </p>
                           </div>
 
@@ -176,7 +256,7 @@ export default function CartPage() {
 
                           {/* Item Total */}
                           <p className="text-sm font-bold text-slate-950 sm:text-base">
-                            ${(item.price * item.quantity).toFixed(2)}
+                            {formatBDT(item.price * item.quantity)}
                           </p>
                         </div>
 
@@ -217,15 +297,15 @@ export default function CartPage() {
                   <span className="text-slate-500">Subtotal</span>
 
                   <span className="font-medium">
-                    ${totalPrice.toFixed(2)}
+                    {formatBDT(totalPrice)}
                   </span>
                 </div>
 
                 <div className="flex justify-between text-xs sm:text-sm">
                   <span className="text-slate-500">Shipping</span>
 
-                  <span className="font-semibold text-green-600">
-                    Free
+                  <span className="font-medium text-slate-600">
+                    Calculated at checkout
                   </span>
                 </div>
               </div>
@@ -238,7 +318,7 @@ export default function CartPage() {
                 </span>
 
                 <span className="text-xl font-bold sm:text-2xl">
-                  ${totalPrice.toFixed(2)}
+                  {formatBDT(totalPrice)}
                 </span>
               </div>
 
@@ -260,6 +340,6 @@ export default function CartPage() {
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }

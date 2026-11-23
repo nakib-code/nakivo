@@ -1,9 +1,29 @@
+import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 
 import { requireAdmin } from "@/lib/auth";
+import { deleteFromCloudinary } from "@/lib/cloudinary";
 import connectDB from "@/lib/db";
 import Category from "@/models/Category";
+import { createCategorySlug } from "@/service/category/category.service";
+
+function isValidImageUrl(value: string): boolean {
+  if (value === "") {
+    return true;
+  }
+
+  if (value.startsWith("/") && !value.startsWith("//")) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 
 // =========================
 // GET SINGLE CATEGORY
@@ -99,7 +119,29 @@ export async function PATCH(
 
     await connectDB();
 
-    const body = await req.json();
+    let body: { name?: unknown; description?: unknown; image?: unknown };
+
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid request body",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid request body",
+        },
+        { status: 400 }
+      );
+    }
 
     const { name, description, image } = body;
 
@@ -137,19 +179,35 @@ export async function PATCH(
       }
 
       updateData.name = name.trim();
-      updateData.slug = name
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "");
+      updateData.slug = createCategorySlug(name);
     }
 
     if (description !== undefined) {
-      updateData.description = description;
+      if (typeof description !== "string") {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Category description must be a string",
+          },
+          { status: 400 }
+        );
+      }
+
+      updateData.description = description.trim();
     }
 
     if (image !== undefined) {
-      updateData.image = image;
+      if (typeof image !== "string" || !isValidImageUrl(image.trim())) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Category image must be a valid URL",
+          },
+          { status: 400 }
+        );
+      }
+
+      updateData.image = image.trim();
     }
 
     const category = await Category.findByIdAndUpdate(
@@ -171,6 +229,10 @@ export async function PATCH(
       );
     }
 
+    revalidatePath("/");
+    revalidatePath("/products");
+    revalidatePath(`/category/${category.slug}`);
+
     return NextResponse.json(
       {
         success: true,
@@ -180,6 +242,21 @@ export async function PATCH(
       { status: 200 }
     );
   } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === 11000
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Category name or slug already exists",
+        },
+        { status: 409 }
+      );
+    }
+
     console.error("PATCH Category Error:", error);
 
     return NextResponse.json(
@@ -240,6 +317,16 @@ export async function DELETE(
         { status: 404 }
       );
     }
+
+    if (category.imagePublicId) {
+      await deleteFromCloudinary(category.imagePublicId).catch((cleanupError) =>
+        console.error("Category Cloudinary delete error:", cleanupError)
+      );
+    }
+
+    revalidatePath("/");
+    revalidatePath("/products");
+    revalidatePath(`/category/${category.slug}`);
 
     return NextResponse.json(
       {

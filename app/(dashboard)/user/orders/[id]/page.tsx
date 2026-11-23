@@ -16,6 +16,8 @@ import {
   CreditCard,
 } from "lucide-react";
 
+import { formatBDT } from "@/lib/currency";
+
 interface OrderItem {
   _id?: string;
   product?: string | { _id?: string } | null;
@@ -43,13 +45,6 @@ interface OrderData {
   isPaid?: boolean;
   status?: string;
   createdAt?: string;
-}
-
-function formatBDT(amount: number) {
-  return `৳${Number.isFinite(amount) ? amount : 0}`.replace(
-    /(\d)(?=(\d{3})+(?!\d))/g,
-    "$1,"
-  );
 }
 
 function formatOrderDate(date?: string) {
@@ -87,14 +82,12 @@ export default function OrderDetailsPage() {
   const orderId = params?.id;
 
   const [order, setOrder] = useState<OrderData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(Boolean(orderId));
+  const [error, setError] = useState(orderId ? "" : "Order ID is missing.");
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (!orderId) {
-      setError("Order ID is missing.");
-      setLoading(false);
       return;
     }
 

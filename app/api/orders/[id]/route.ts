@@ -2,23 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { isValidObjectId } from "mongoose";
 
 import connectDB from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, requireAdmin } from "@/lib/auth";
 import Order from "@/models/Order";
+import {
+  isValidOrderStatus,
+  OrderServiceError,
+  updateOrderStatus,
+} from "@/service/order/order.service";
 
 interface RouteParams {
   params: Promise<{
     id: string;
   }>;
 }
-
-const allowedStatuses = [
-  "Pending",
-  "Processing",
-  "Delivered",
-  "Cancelled",
-] as const;
-
-type OrderStatus = (typeof allowedStatuses)[number];
 
 // ==================================================
 // GET SINGLE ORDER
@@ -126,31 +122,18 @@ export async function PATCH(
   { params }: RouteParams
 ) {
   try {
-    // Authentication
-    const user = await getCurrentUser();
+    // Authentication & Admin Authorization
+    const auth = await requireAdmin();
 
-    if (!user) {
+    if (!auth.authorized) {
       return NextResponse.json(
         {
           success: false,
-          message: "Authentication required",
+          message: auth.message,
         },
-        { status: 401 }
+        { status: auth.status }
       );
     }
-
-    // Admin authorization
-    if (user.role !== "admin") {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Admin access required",
-        },
-        { status: 403 }
-      );
-    }
-
-    await connectDB();
 
     // Validate order ID
     const { id } = await params;
@@ -180,12 +163,19 @@ export async function PATCH(
       );
     }
 
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid request body",
+        },
+        { status: 400 }
+      );
+    }
+
     const status = body.status;
 
-    if (
-      typeof status !== "string" ||
-      !allowedStatuses.includes(status as OrderStatus)
-    ) {
+    if (!isValidOrderStatus(status)) {
       return NextResponse.json(
         {
           success: false,
@@ -195,33 +185,30 @@ export async function PATCH(
       );
     }
 
-    // Find order
-    const order = await Order.findById(id);
+    await connectDB();
 
-    if (!order) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Order not found",
-        },
-        { status: 404 }
-      );
-    }
-
-    // Update status
-    order.status = status as OrderStatus;
-    await order.save();
+    const updatedOrder = await updateOrderStatus(id, status);
 
     return NextResponse.json(
       {
         success: true,
         message: "Order status updated successfully",
-        data: order,
+        data: updatedOrder,
       },
       { status: 200 }
     );
   } catch (error) {
     console.error("PATCH Order Status Error:", error);
+
+    if (error instanceof OrderServiceError) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: error.message,
+        },
+        { status: error.statusCode }
+      );
+    }
 
     return NextResponse.json(
       {

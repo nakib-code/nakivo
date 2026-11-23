@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
+import { formatBDT } from "@/lib/currency";
 
 interface Props {
   totalUsers: number;
@@ -40,10 +41,7 @@ export default function StatsCards({
     },
     {
       title: "Revenue",
-      value: new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-      }).format(totalRevenue),
+      value: formatBDT(totalRevenue),
       icon: DollarSign,
     },
   ];

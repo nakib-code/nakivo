@@ -1,5 +1,8 @@
-import { env } from "@/lib/env";
-import { IProduct } from "@/types";
+import "server-only";
+
+import connectDB from "@/lib/db";
+import Product from "@/models/Product";
+import type { IProduct } from "@/types";
 
 interface GetProductsOptions {
   limit?: number;
@@ -7,53 +10,102 @@ interface GetProductsOptions {
   search?: string;
   featured?: boolean;
   flashSale?: boolean;
+  sort?: string;
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getSortOrder(sort?: string): Record<string, 1 | -1> {
+  switch (sort) {
+    case "price-low":
+      return { price: 1, createdAt: -1 };
+    case "price-high":
+      return { price: -1, createdAt: -1 };
+    case "newest":
+    default:
+      return { createdAt: -1 };
+  }
 }
 
 export async function getProducts(
   options: GetProductsOptions = {}
 ): Promise<IProduct[]> {
-  const params = new URLSearchParams();
+  await connectDB();
 
-  if (options.limit !== undefined) {
-    params.set("limit", options.limit.toString());
+  const query: Record<string, unknown> = {};
+
+  if (options.category && options.category !== "all") {
+    query.category = options.category;
   }
 
-  if (options.category) {
-    params.set("category", options.category);
+  if (options.search?.trim()) {
+    query.title = {
+      $regex: escapeRegex(options.search.trim()),
+      $options: "i",
+    };
   }
 
-  if (options.search) {
-    params.set("search", options.search);
+  if (options.featured === true) {
+    query.isFeatured = true;
   }
 
-  if (options.featured !== undefined) {
-    params.set(
-      "featured",
-      options.featured.toString()
-    );
+  if (options.flashSale === true || options.sort === "deals") {
+    const now = new Date();
+    query.isFlashSale = true;
+    query.flashSalePrice = { $gt: 0 };
+    query.flashSaleStart = { $lte: now };
+    query.flashSaleEnd = { $gt: now };
   }
 
-  if (options.flashSale !== undefined) {
-    params.set(
-      "flashSale",
-      options.flashSale.toString()
-    );
-  }
+  const limit =
+    options.limit !== undefined &&
+    Number.isInteger(options.limit) &&
+    options.limit > 0
+      ? Math.min(options.limit, 100)
+      : 24;
 
-  const res = await fetch(
-    `${env.NEXT_PUBLIC_BASE_URL}/api/products?${params.toString()}`,
-    {
-      cache: "no-store",
-    }
-  );
+  const products = await Product.find(query)
+    .select(
+      "title description price category stock images ratings soldCount isFeatured isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt updatedAt"
+    )
+    .sort(getSortOrder(options.sort))
+    .limit(limit)
+    .lean();
 
-  if (!res.ok) {
-    throw new Error("Failed to fetch products");
-  }
-
-  const data = await res.json();
-
-  return Array.isArray(data.data)
-    ? data.data
-    : [];
+  return products.map((product) => ({
+    _id: String(product._id),
+    title: product.title,
+    description: product.description,
+    price: Number(product.price),
+    category: product.category,
+    stock: Number(product.stock ?? 0),
+    ratings: Number(product.ratings ?? 0),
+    soldCount: Number(product.soldCount ?? 0),
+    isFeatured: Boolean(product.isFeatured),
+    isFlashSale: Boolean(product.isFlashSale),
+    flashSalePrice:
+      product.flashSalePrice !== undefined && product.flashSalePrice !== null
+        ? Number(product.flashSalePrice)
+        : undefined,
+    flashSaleStart: product.flashSaleStart
+      ? new Date(product.flashSaleStart)
+      : undefined,
+    flashSaleEnd: product.flashSaleEnd
+      ? new Date(product.flashSaleEnd)
+      : undefined,
+    images: Array.isArray(product.images)
+      ? product.images.map((image) => ({
+          url: image.url,
+          publicId: image.publicId,
+        }))
+      : [],
+    createdAt: product.createdAt
+      ? new Date(product.createdAt)
+      : undefined,
+    updatedAt: product.updatedAt
+      ? new Date(product.updatedAt)
+      : undefined,
+  }));
 }

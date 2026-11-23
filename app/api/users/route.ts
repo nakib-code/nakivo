@@ -10,9 +10,7 @@ import { requireAdmin } from "@/lib/auth";
 // Admin Only
 // =========================
 
-export async function GET(
-  req: NextRequest
-) {
+export async function GET(req: NextRequest) {
   try {
 
     const auth = await requireAdmin();
@@ -33,17 +31,45 @@ export async function GET(
     await connectDB();
 
 
-    const users = await User.find()
-      .select("-password")
-      .sort({
-        createdAt: -1,
-      });
+    const { searchParams } = new URL(req.url);
+    const parsedPage = Number(searchParams.get("page"));
+    const page =
+      Number.isFinite(parsedPage) && parsedPage >= 1
+        ? Math.floor(parsedPage)
+        : 1;
+    const parsedLimit = Number(searchParams.get("limit"));
+    const limit =
+      Number.isFinite(parsedLimit) && parsedLimit >= 1
+        ? Math.min(Math.floor(parsedLimit), 100)
+        : 50;
+    const skip = (page - 1) * limit;
 
+    const [total, users] = await Promise.all([
+      User.countDocuments(),
+      User.find()
+        .select("-password")
+        .sort({
+          createdAt: -1,
+        })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
 
     return NextResponse.json(
       {
         success: true,
         data: users,
+        pagination: {
+          currentPage: page,
+          limit,
+          total,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
+        },
       },
       {
         status: 200,

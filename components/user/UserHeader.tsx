@@ -31,6 +31,8 @@ export default function UserHeader() {
         {/* Mobile Button */}
 
         <button
+          type="button"
+          aria-label="Open navigation menu"
           onClick={() => setOpen(true)}
           className="
             rounded-lg
@@ -92,6 +94,8 @@ export default function UserHeader() {
             <div className="mb-5 flex justify-end">
 
               <button
+                type="button"
+                aria-label="Close navigation menu"
                 onClick={()=>setOpen(false)}
                 className="
                   rounded-lg
@@ -107,7 +111,7 @@ export default function UserHeader() {
             </div>
 
 
-            <UserSidebar />
+            <UserSidebar onNavigate={() => setOpen(false)} />
 
 
           </div>

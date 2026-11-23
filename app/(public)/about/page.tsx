@@ -1,4 +1,4 @@
-
+import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -7,6 +7,12 @@ import {
   Sparkles,
   Truck,
 } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "About Us",
+  description:
+    "Learn about our mission to deliver curated quality products with simple, reliable online shopping.",
+};
 
 const features = [
   {
@@ -47,7 +53,7 @@ const containerClass =
 
 export default function AboutPage() {
   return (
-    <main className="overflow-hidden bg-white text-slate-950">
+    <div className="overflow-hidden bg-white text-slate-950">
       {/* Hero Section */}
       <section className="border-b border-slate-100">
         <div
@@ -287,6 +293,6 @@ export default function AboutPage() {
           </div>
         </div>
       </section>
-    </main>
+    </div>
   );
 }

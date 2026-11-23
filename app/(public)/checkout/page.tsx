@@ -1,33 +1,31 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 
-import { useCartStore } from "@/store/useCartStore";
+import { formatBDT } from "@/lib/currency";
+import {
+  calculateDeliveryDetails,
+  DEFAULT_DELIVERY_SETTINGS,
+  normalizeDeliverySettings,
+  type DeliverySettingsData,
+} from "@/lib/delivery";
+import { useCartHydrated, useCartStore } from "@/store/useCartStore";
 import { useCreateOrder } from "@/hooks/useOrders";
+import type { IProduct } from "@/types";
 import type { CreateOrderPayload, DeliveryArea } from "@/types/order";
-
-interface DeliverySettings {
-  insideDhakaCharge: number;
-  outsideDhakaCharge: number;
-  freeDeliveryEnabled: boolean;
-  freeDeliveryThreshold: number;
-  estimatedDeliveryTime: string;
-}
-
-function formatBDT(amount: number) {
-  const safeAmount = Number.isFinite(amount) ? amount : 0;
-
-  return `৳${safeAmount.toLocaleString("en-BD", {
-    maximumFractionDigits: 2,
-  })}`;
-}
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cart, getTotalPrice, clearCart } = useCartStore();
+  const { data: session, status: sessionStatus } = useSession();
+  const hydrated = useCartHydrated();
+  const { cart, getTotalPrice, clearCart, syncCartWithProducts } =
+    useCartStore();
   const createOrderMutation = useCreateOrder();
+  const cartIdsKey = cart.map((item) => item._id).join(",");
 
   const [shipping, setShipping] = useState({
     address: "",
@@ -39,7 +37,7 @@ export default function CheckoutPage() {
     useState<DeliveryArea>("INSIDE_DHAKA");
 
   const [deliverySettings, setDeliverySettings] =
-    useState<DeliverySettings | null>(null);
+    useState<DeliverySettingsData | null>(null);
 
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState(false);
@@ -65,28 +63,7 @@ export default function CheckoutPage() {
           throw new Error("Could not load delivery settings");
         }
 
-        const data = result.data;
-
-        const settings: DeliverySettings = {
-          insideDhakaCharge: Number(data.insideDhakaCharge),
-          outsideDhakaCharge: Number(data.outsideDhakaCharge),
-          freeDeliveryEnabled: Boolean(data.freeDeliveryEnabled),
-          freeDeliveryThreshold: Number(data.freeDeliveryThreshold),
-          estimatedDeliveryTime: String(
-            data.estimatedDeliveryTime ?? "2–5 business days",
-          ),
-        };
-
-        if (
-          !Number.isFinite(settings.insideDhakaCharge) ||
-          !Number.isFinite(settings.outsideDhakaCharge) ||
-          !Number.isFinite(settings.freeDeliveryThreshold) ||
-          settings.insideDhakaCharge < 0 ||
-          settings.outsideDhakaCharge < 0 ||
-          settings.freeDeliveryThreshold < 0
-        ) {
-          throw new Error("Invalid delivery settings");
-        }
+        const settings = normalizeDeliverySettings(result.data);
 
         if (!cancelled) {
           setDeliverySettings(settings);
@@ -111,18 +88,73 @@ export default function CheckoutPage() {
     };
   }, []);
 
-  const subtotal = getTotalPrice();
+  // Validate persisted cart prices and stock against the database
+  useEffect(() => {
+    if (!hydrated || !cartIdsKey) {
+      return;
+    }
 
-  const selectedDeliveryCharge =
-    deliveryArea === "INSIDE_DHAKA"
-      ? (deliverySettings?.insideDhakaCharge ?? 0)
-      : (deliverySettings?.outsideDhakaCharge ?? 0);
+    let cancelled = false;
 
-  const isFreeDelivery =
-    deliverySettings?.freeDeliveryEnabled === true &&
-    subtotal >= (deliverySettings?.freeDeliveryThreshold ?? Infinity);
+    async function validateCart() {
+      try {
+        const res = await fetch(
+          `/api/products?ids=${encodeURIComponent(cartIdsKey)}`,
+          { cache: "no-store" }
+        );
 
-  const deliveryCharge = isFreeDelivery ? 0 : selectedDeliveryCharge;
+        if (!res.ok) {
+          return;
+        }
+
+        const json = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          data?: IProduct[];
+        } | null;
+
+        if (!cancelled && json?.success && Array.isArray(json.data)) {
+          const { removedCount, updatedCount } = syncCartWithProducts(
+            json.data
+          );
+
+          if (removedCount > 0) {
+            toast.info(
+              `${removedCount} out-of-stock or unavailable ${
+                removedCount === 1 ? "item was" : "items were"
+              } removed from your cart.`
+            );
+          } else if (updatedCount > 0) {
+            toast.info(
+              "Cart prices and stock were updated to match current store inventory."
+            );
+          }
+        }
+      } catch {
+        // Server still re-validates prices and stock on order submission
+      }
+    }
+
+    void validateCart();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, cartIdsKey, syncCartWithProducts]);
+
+  const activeCart = hydrated ? cart : [];
+  const subtotal = hydrated ? getTotalPrice() : 0;
+
+  const effectiveSettings = deliverySettings ?? DEFAULT_DELIVERY_SETTINGS;
+  const deliveryDetails = calculateDeliveryDetails(
+    subtotal,
+    deliveryArea,
+    effectiveSettings
+  );
+
+  const isFreeDelivery = deliveryDetails.isFreeDelivery;
+  const deliveryCharge = deliveryDetails.deliveryCharge;
+  const meetsMinimumOrder = deliveryDetails.meetsMinimumOrder;
+  const minimumOrderShortfall = deliveryDetails.minimumOrderShortfall;
 
   const total = subtotal + deliveryCharge;
 
@@ -138,13 +170,28 @@ export default function CheckoutPage() {
   const handleOrderSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (cart.length === 0) {
+    if (sessionStatus !== "authenticated") {
+      toast.error("Please sign in to place your order.");
+      router.push("/login?callbackUrl=/checkout");
+      return;
+    }
+
+    if (activeCart.length === 0) {
       toast.error("Your cart is empty");
       return;
     }
 
     if (!deliverySettings || settingsError || settingsLoading) {
       toast.error("Delivery settings are unavailable. Please try again.");
+      return;
+    }
+
+    if (!meetsMinimumOrder) {
+      toast.error(
+        `Minimum order amount is ${formatBDT(
+          deliverySettings.minimumOrderAmount
+        )}.`
+      );
       return;
     }
 
@@ -188,7 +235,8 @@ export default function CheckoutPage() {
 
         toast.success("Order placed successfully!");
         clearCart();
-        router.push(`/user/orders/${order._id}`);
+        const isAdmin = session?.user?.role === "admin";
+        router.push(isAdmin ? "/admin/orders" : `/user/orders/${order._id}`);
       },
       onError: (error) => {
         toast.error(error.message || "Order failed");
@@ -196,8 +244,46 @@ export default function CheckoutPage() {
     });
   };
 
+  if (!hydrated || sessionStatus === "loading") {
+    return (
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-12 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <div className="h-96 animate-pulse rounded-xl border bg-slate-100" />
+      </div>
+    );
+  }
+
+  if (sessionStatus === "unauthenticated") {
+    return (
+      <div className="mx-auto flex min-h-[60vh] w-full max-w-lg items-center justify-center px-4 py-12">
+        <div className="w-full rounded-2xl border bg-white p-8 text-center shadow-sm">
+          <h1 className="text-2xl font-bold text-slate-900">
+            Sign in to Checkout
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Please sign in to your account to complete your Cash on Delivery
+            order and track delivery status.
+          </p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <Link
+              href="/login?callbackUrl=/checkout"
+              className="inline-flex items-center justify-center rounded-lg bg-black px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/register"
+              className="inline-flex items-center justify-center rounded-lg border px-5 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-50"
+            >
+              Create Account
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8 xl:px-10 2xl:px-12">
       <div className="mb-6">
         <h1 className="text-2xl font-bold sm:text-3xl">Checkout</h1>
         <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
@@ -319,7 +405,9 @@ export default function CheckoutPage() {
                     </span>
                   </span>
                   <span className="shrink-0 text-sm font-semibold">
-                    {formatBDT(deliverySettings.insideDhakaCharge)}
+                    {deliverySettings.deliveryChargeEnabled
+                      ? formatBDT(deliverySettings.insideDhakaCharge)
+                      : "Free"}
                   </span>
                 </label>
 
@@ -343,18 +431,26 @@ export default function CheckoutPage() {
                     </span>
                   </span>
                   <span className="shrink-0 text-sm font-semibold">
-                    {formatBDT(deliverySettings.outsideDhakaCharge)}
+                    {deliverySettings.deliveryChargeEnabled
+                      ? formatBDT(deliverySettings.outsideDhakaCharge)
+                      : "Free"}
                   </span>
                 </label>
 
-                {deliverySettings.freeDeliveryEnabled && (
+                {!deliverySettings.deliveryChargeEnabled ? (
                   <p className="text-xs text-green-700">
-                    {deliverySettings.freeDeliveryThreshold > 0
-                      ? `Free delivery on orders of ${formatBDT(
-                          deliverySettings.freeDeliveryThreshold,
-                        )} or more.`
-                      : "Free delivery is currently enabled."}
+                    Free delivery is currently enabled for all orders.
                   </p>
+                ) : (
+                  deliverySettings.freeDeliveryEnabled && (
+                    <p className="text-xs text-green-700">
+                      {deliverySettings.freeDeliveryThreshold > 0
+                        ? `Free delivery on orders of ${formatBDT(
+                            deliverySettings.freeDeliveryThreshold,
+                          )} or more.`
+                        : "Free delivery is currently enabled."}
+                    </p>
+                  )
                 )}
 
                 <p className="text-xs text-muted-foreground">
@@ -378,14 +474,32 @@ export default function CheckoutPage() {
             </div>
           </section>
 
+          {deliverySettings &&
+            deliverySettings.minimumOrderAmount > 0 &&
+            !meetsMinimumOrder &&
+            activeCart.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                Minimum order amount is{" "}
+                <span className="font-semibold">
+                  {formatBDT(deliverySettings.minimumOrderAmount)}
+                </span>
+                . Add{" "}
+                <span className="font-semibold">
+                  {formatBDT(minimumOrderShortfall)}
+                </span>{" "}
+                more to place your order.
+              </div>
+            )}
+
           <button
             type="submit"
             disabled={
               createOrderMutation.isPending ||
-              cart.length === 0 ||
+              activeCart.length === 0 ||
               settingsLoading ||
               settingsError ||
-              !deliverySettings
+              !deliverySettings ||
+              !meetsMinimumOrder
             }
             className="w-full rounded-lg bg-black py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 sm:py-3.5"
           >

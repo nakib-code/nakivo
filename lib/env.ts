@@ -10,6 +10,10 @@ function required(name: string): string {
   return value;
 }
 
+function optional(name: string): string {
+  return process.env[name] ?? "";
+}
+
 export const env = {
   // =========================
   // Database
@@ -29,13 +33,13 @@ export const env = {
   NEXTAUTH_URL: required("NEXTAUTH_URL"),
 
   // =========================
-  // Stripe
+  // Stripe (optional while COD-only)
   // =========================
-  STRIPE_SECRET_KEY: required("STRIPE_SECRET_KEY"),
-  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: required(
+  STRIPE_SECRET_KEY: optional("STRIPE_SECRET_KEY"),
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: optional(
     "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
   ),
-  STRIPE_WEBHOOK_SECRET: required("STRIPE_WEBHOOK_SECRET"),
+  STRIPE_WEBHOOK_SECRET: optional("STRIPE_WEBHOOK_SECRET"),
 
   // =========================
   // Application URLs

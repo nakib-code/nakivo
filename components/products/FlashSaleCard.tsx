@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { useCartStore } from "@/store/useCartStore";
+import { formatBDT } from "@/lib/currency";
 import type { IProduct } from "@/types";
 
 interface FlashSaleCardProps {
@@ -26,89 +27,32 @@ interface TimeLeft {
   seconds: string;
 }
 
-function getTimeLeft(endDate: string | Date): TimeLeft {
-  const end = new Date(endDate).getTime();
-  const total = end - Date.now();
-
-  if (!Number.isFinite(end) || total <= 0) {
-    return {
-      total: 0,
-      hours: "00",
-      minutes: "00",
-      seconds: "00",
-    };
-  }
-
-  const seconds = Math.floor(total / 1000);
-
-  return {
-    total,
-    hours: String(Math.floor(seconds / 3600)).padStart(2, "0"),
-    minutes: String(Math.floor((seconds % 3600) / 60)).padStart(
-      2,
-      "0",
-    ),
-    seconds: String(seconds % 60).padStart(2, "0"),
-  };
-}
-
-function isFlashSaleActive(product: IProduct): boolean {
-  if (
-    !product.isFlashSale ||
-    product.flashSalePrice == null ||
-    !product.flashSaleStart ||
-    !product.flashSaleEnd
-  ) {
-    return false;
-  }
-
-  const now = Date.now();
-  const start = new Date(product.flashSaleStart).getTime();
-  const end = new Date(product.flashSaleEnd).getTime();
-  const price = Number(product.flashSalePrice);
-  const regularPrice = Number(product.price);
-
-  return (
-    Number.isFinite(start) &&
-    Number.isFinite(end) &&
-    Number.isFinite(price) &&
-    Number.isFinite(regularPrice) &&
-    start <= now &&
-    now < end &&
-    price > 0 &&
-    regularPrice > price
-  );
-}
-
-function formatPrice(value: number): string {
-  return value.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 export default function FlashSaleCard({
   product,
 }: FlashSaleCardProps) {
   const addToCart = useCartStore((state) => state.addToCart);
 
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      setNow(Date.now());
-    }, 1000);
+    const updateNow = () => setNow(Date.now());
+    const initial = window.setTimeout(updateNow, 0);
+    const interval = window.setInterval(updateNow, 1000);
 
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(interval);
+    };
   }, []);
 
-  const isSaleActive = isFlashSaleActiveAt(product, now);
+  const isSaleActive =
+    now !== null && isFlashSaleActiveAt(product, now);
   const productId = product._id?.toString() ?? "";
   const productHref = productId
     ? `/products/${productId}`
     : "/products";
 
-  const image = product.images?.[0]?.url || "/placeholder.png";
+  const image = product.images?.[0]?.url || "";
 
   const regularPrice = Number(product.price);
   const validRegularPrice =
@@ -153,11 +97,19 @@ export default function FlashSaleCard({
       return;
     }
 
-    addToCart({
+    const result = addToCart({
       ...product,
       _id: productId,
-      price: currentPrice,
     });
+
+    if (!result.added) {
+      toast.error(
+        result.reason === "max_stock"
+          ? "Maximum available quantity already in cart"
+          : "Unable to add product to cart"
+      );
+      return;
+    }
 
     toast.success(`${product.title} added to cart`);
   };
@@ -196,13 +148,19 @@ export default function FlashSaleCard({
   {/* Product Image */}
   <Link href={productHref} className="block">
     <div className="relative h-44 w-full overflow-hidden xs:h-48 sm:h-64 lg:h-72">
-      <Image
-        src={image}
-        alt={product.title || "Product image"}
-        fill
-        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 25vw"
-        className="object-cover transition-transform duration-700 ease-out group-hover:scale-105 sm:group-hover:scale-110"
-      />
+      {image ? (
+        <Image
+          src={image}
+          alt={product.title || "Product image"}
+          fill
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 25vw"
+          className="object-cover transition-transform duration-700 ease-out group-hover:scale-105 sm:group-hover:scale-110"
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-slate-100 text-xs font-medium text-slate-400">
+          No Image Available
+        </div>
+      )}
     </div>
   </Link>
 
@@ -238,18 +196,18 @@ export default function FlashSaleCard({
               isSaleActive ? "text-red-500" : "text-slate-950"
             }`}
           >
-            ${formatPrice(currentPrice)}
+            {formatBDT(currentPrice)}
           </span>
 
           {discount > 0 && (
             <span className="text-xs text-slate-400 line-through sm:text-sm">
-              ${formatPrice(validRegularPrice)}
+              {formatBDT(validRegularPrice)}
             </span>
           )}
         </div>
 
         {/* Countdown */}
-        {isSaleActive && product.flashSaleEnd && (
+        {now !== null && isSaleActive && product.flashSaleEnd && (
           <div className="mt-3 sm:mt-4">
             <FlashCountdown endDate={product.flashSaleEnd} now={now} />
           </div>

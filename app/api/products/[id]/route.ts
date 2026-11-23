@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import mongoose from "mongoose";
 
+import { requireAdmin } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
 import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary";
@@ -13,76 +15,58 @@ interface RouteParams {
 
 const MAX_IMAGES = 5;
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+]);
 
 // ========================================
 // GET SINGLE PRODUCT
 // ========================================
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest, { params }: RouteParams) {
   try {
+    const { id } = await params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid product ID",
+        },
+        { status: 400 }
+      );
+    }
+
     await connectDB();
 
-    const { searchParams } = new URL(req.url);
+    const product = await Product.findById(id).lean();
 
-    const category = searchParams.get("category");
-    const search = searchParams.get("search");
-    const limitValue = searchParams.get("limit");
-    const isFeaturedValue =
-      searchParams.get("isFeatured");
-
-    const query: Record<string, unknown> = {};
-
-    if (category) {
-      query.category = category;
+    if (!product) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Product not found",
+        },
+        { status: 404 }
+      );
     }
-
-    if (search) {
-      query.title = {
-        $regex: search,
-        $options: "i",
-      };
-    }
-
-    // Featured filter
-    if (isFeaturedValue !== null) {
-      query.isFeatured =
-        isFeaturedValue === "true";
-    }
-
-    const limit = limitValue
-      ? Number(limitValue)
-      : undefined;
-
-    let productsQuery = Product.find(query).sort({
-      createdAt: -1,
-    });
-
-    if (
-      limit &&
-      Number.isInteger(limit) &&
-      limit > 0
-    ) {
-      productsQuery = productsQuery.limit(limit);
-    }
-
-    const products = await productsQuery;
 
     return NextResponse.json(
       {
         success: true,
-        data: products,
+        data: product,
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error(
-      "GET Products Error:",
-      error
-    );
+    console.error("GET Product Error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to fetch products",
+        message: "Failed to fetch product",
       },
       { status: 500 }
     );
@@ -94,6 +78,18 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest, { params }: RouteParams) {
   try {
+    const auth = await requireAdmin();
+
+    if (!auth.authorized) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: auth.message,
+        },
+        { status: auth.status },
+      );
+    }
+
     await connectDB();
 
     const { id } = await params;
@@ -120,9 +116,22 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const formData = await req.formData();
+    let formData: FormData;
+
+    try {
+      formData = await req.formData();
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid form data",
+        },
+        { status: 400 },
+      );
+    }
 
     const updateData: Record<string, unknown> = {};
+    const unsetData: Record<string, 1> = {};
 
     // ========================================
     // Basic Information
@@ -159,13 +168,14 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     // ========================================
 
     if (priceValue !== undefined) {
-      const price = Number(priceValue);
+      const trimmedPrice = priceValue.trim();
+      const price = trimmedPrice === "" ? Number.NaN : Number(trimmedPrice);
 
-      if (!Number.isFinite(price) || price < 0) {
+      if (!Number.isFinite(price) || price <= 0) {
         return NextResponse.json(
           {
             success: false,
-            message: "Invalid price",
+            message: "Product price must be greater than 0",
           },
           { status: 400 },
         );
@@ -179,7 +189,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     // ========================================
 
     if (stockValue !== undefined) {
-      const stock = Number(stockValue);
+      const trimmedStock = stockValue.trim();
+      const stock = trimmedStock === "" ? Number.NaN : Number(trimmedStock);
 
       if (!Number.isInteger(stock) || stock < 0) {
         return NextResponse.json(
@@ -230,90 +241,83 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         priceValue !== undefined ? Number(priceValue) : product.price;
 
       // ========================================
-      // Flash Sale Price
+      // Flash Sale Price (must be positive and lower than regular price)
       // ========================================
+
+      const effectiveFlashSalePrice =
+        flashSalePriceValue !== undefined
+          ? Number(flashSalePriceValue)
+          : product.flashSalePrice !== undefined &&
+              product.flashSalePrice !== null
+            ? Number(product.flashSalePrice)
+            : Number.NaN;
+
+      if (
+        !Number.isFinite(effectiveFlashSalePrice) ||
+        effectiveFlashSalePrice <= 0
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Flash sale price must be a positive number",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (effectiveFlashSalePrice >= currentPrice) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Flash sale price must be lower than regular price",
+          },
+          { status: 400 },
+        );
+      }
 
       if (flashSalePriceValue !== undefined) {
-        const flashSalePrice = Number(flashSalePriceValue);
-
-        if (!Number.isFinite(flashSalePrice) || flashSalePrice < 0) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: "Invalid flash sale price",
-            },
-            { status: 400 },
-          );
-        }
-
-        if (flashSalePrice >= currentPrice) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: "Flash sale price must be lower than regular price",
-            },
-            { status: 400 },
-          );
-        }
-
-        updateData.flashSalePrice = flashSalePrice;
+        updateData.flashSalePrice = effectiveFlashSalePrice;
       }
 
       // ========================================
-      // Flash Sale Start
-      // ========================================
-
-      if (flashSaleStartValue !== undefined) {
-        const start = new Date(flashSaleStartValue);
-
-        if (Number.isNaN(start.getTime())) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: "Invalid flash sale start time",
-            },
-            { status: 400 },
-          );
-        }
-
-        updateData.flashSaleStart = start;
-      }
-
-      // ========================================
-      // Flash Sale End
-      // ========================================
-
-      if (flashSaleEndValue !== undefined) {
-        const end = new Date(flashSaleEndValue);
-
-        if (Number.isNaN(end.getTime())) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: "Invalid flash sale end time",
-            },
-            { status: 400 },
-          );
-        }
-
-        updateData.flashSaleEnd = end;
-      }
-
-      // ========================================
-      // Validate Start / End
+      // Flash Sale Start & End (required & valid window)
       // ========================================
 
       const start =
         flashSaleStartValue !== undefined
           ? new Date(flashSaleStartValue)
-          : product.flashSaleStart;
+          : product.flashSaleStart
+            ? new Date(product.flashSaleStart)
+            : null;
 
       const end =
         flashSaleEndValue !== undefined
           ? new Date(flashSaleEndValue)
-          : product.flashSaleEnd;
+          : product.flashSaleEnd
+            ? new Date(product.flashSaleEnd)
+            : null;
 
-      if (start && end && end <= start) {
+      if (!start || Number.isNaN(start.getTime())) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Valid flash sale start time is required",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (!end || Number.isNaN(end.getTime())) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Valid flash sale end time is required",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (end <= start) {
         return NextResponse.json(
           {
             success: false,
@@ -322,14 +326,22 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
           { status: 400 },
         );
       }
+
+      if (flashSaleStartValue !== undefined) {
+        updateData.flashSaleStart = start;
+      }
+
+      if (flashSaleEndValue !== undefined) {
+        updateData.flashSaleEnd = end;
+      }
     } else {
       // ========================================
-      // Flash Sale Disabled
+      // Flash Sale Disabled — properly $unset fields in MongoDB
       // ========================================
 
-      updateData.flashSalePrice = undefined;
-      updateData.flashSaleStart = undefined;
-      updateData.flashSaleEnd = undefined;
+      unsetData.flashSalePrice = 1;
+      unsetData.flashSaleStart = 1;
+      unsetData.flashSaleEnd = 1;
     }
 
     // ========================================
@@ -341,6 +353,9 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     const imageFiles = imageEntries.filter(
       (item): item is File => item instanceof File && item.size > 0,
     );
+
+    let uploadedNewImages: Array<{ url: string; publicId: string }> = [];
+    const oldImagesToDelete = product.images.map((image) => image.publicId);
 
     if (imageFiles.length > 0) {
       if (imageFiles.length > MAX_IMAGES) {
@@ -358,11 +373,11 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       // ========================================
 
       for (const file of imageFiles) {
-        if (!file.type.startsWith("image/")) {
+        if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
           return NextResponse.json(
             {
               success: false,
-              message: `${file.name} is not a valid image`,
+              message: `${file.name} must be a JPG, PNG, WebP, or AVIF image`,
             },
             { status: 400 },
           );
@@ -383,44 +398,83 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       // Upload New Images
       // ========================================
 
-      const uploadedImages = await Promise.all(
+      const uploadResults = await Promise.allSettled(
         imageFiles.map((file) =>
           uploadToCloudinary(file, "ecommerce/products"),
         ),
       );
 
-      const newImages = uploadedImages.map((image) => ({
-        url: image.secure_url,
-        publicId: image.public_id,
-      }));
+      const succeeded = uploadResults
+        .filter(
+          (
+            res,
+          ): res is PromiseFulfilledResult<{
+            secure_url: string;
+            public_id: string;
+          }> => res.status === "fulfilled",
+        )
+        .map((res) => ({
+          url: res.value.secure_url,
+          publicId: res.value.public_id,
+        }));
 
-      // ========================================
-      // Delete Old Images
-      // ========================================
+      if (uploadResults.some((res) => res.status === "rejected")) {
+        await Promise.allSettled(
+          succeeded.map((img) => deleteFromCloudinary(img.publicId)),
+        );
 
-      await Promise.all(
-        product.images.map(async (image) => {
-          if (!image.publicId) return;
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Image upload failed",
+          },
+          { status: 500 },
+        );
+      }
 
-          try {
-            await deleteFromCloudinary(image.publicId);
-          } catch (error) {
-            console.error("Cloudinary old image delete error:", error);
-          }
-        }),
-      );
-
-      updateData.images = newImages;
+      uploadedNewImages = succeeded;
+      updateData.images = uploadedNewImages;
     }
 
     // ========================================
-    // Update Product
+    // Update Product (DB first; clean up new uploads on failure, delete old images only after DB succeeds)
     // ========================================
 
-    const updatedProduct = await Product.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    const updateQuery: Record<string, unknown> = {
+      $set: updateData,
+    };
+
+    if (Object.keys(unsetData).length > 0) {
+      updateQuery.$unset = unsetData;
+    }
+
+    let updatedProduct;
+
+    try {
+      updatedProduct = await Product.findByIdAndUpdate(id, updateQuery, {
+        new: true,
+        runValidators: true,
+      });
+    } catch (dbError) {
+      if (uploadedNewImages.length > 0) {
+        await Promise.allSettled(
+          uploadedNewImages.map((img) => deleteFromCloudinary(img.publicId)),
+        );
+      }
+      throw dbError;
+    }
+
+    if (uploadedNewImages.length > 0) {
+      await Promise.allSettled(
+        oldImagesToDelete
+          .filter(Boolean)
+          .map((publicId) => deleteFromCloudinary(publicId)),
+      );
+    }
+
+    revalidatePath("/");
+    revalidatePath("/products");
+    revalidatePath(`/products/${id}`);
 
     return NextResponse.json(
       {
@@ -449,6 +503,18 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   try {
+    const auth = await requireAdmin();
+
+    if (!auth.authorized) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: auth.message,
+        },
+        { status: auth.status },
+      );
+    }
+
     await connectDB();
 
     const { id } = await params;
@@ -476,10 +542,12 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     }
 
     // ========================================
-    // Delete Cloudinary Images
+    // Delete Product First, Then Clean Up Cloudinary Images
     // ========================================
 
-    await Promise.all(
+    await Product.findByIdAndDelete(id);
+
+    await Promise.allSettled(
       product.images.map(async (image) => {
         if (!image.publicId) return;
 
@@ -491,11 +559,9 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
       }),
     );
 
-    // ========================================
-    // Delete Product
-    // ========================================
-
-    await Product.findByIdAndDelete(id);
+    revalidatePath("/");
+    revalidatePath("/products");
+    revalidatePath(`/products/${id}`);
 
     return NextResponse.json(
       {
@@ -523,6 +589,18 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
 
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
   try {
+    const auth = await requireAdmin();
+
+    if (!auth.authorized) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: auth.message,
+        },
+        { status: auth.status },
+      );
+    }
+
     await connectDB();
 
     const { id } = await params;
@@ -549,7 +627,35 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const body = await req.json();
+    let body: {
+      isFeatured?: unknown;
+      isFlashSale?: unknown;
+      flashSalePrice?: unknown;
+      flashSaleStart?: unknown;
+      flashSaleEnd?: unknown;
+    };
+
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid request body",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid request body",
+        },
+        { status: 400 },
+      );
+    }
 
     // ========================================
     // FEATURED PRODUCT
@@ -568,13 +674,45 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     }
 
     // ========================================
-    // DISABLE FLASH SALE
+    // DISABLE FLASH SALE (atomic $unset in MongoDB)
     // ========================================
 
     if (body.isFlashSale === false) {
-      product.flashSalePrice = undefined;
-      product.flashSaleStart = undefined;
-      product.flashSaleEnd = undefined;
+      const setFields: Record<string, unknown> = {
+        isFlashSale: false,
+      };
+
+      if (typeof body.isFeatured === "boolean") {
+        setFields.isFeatured = body.isFeatured;
+      }
+
+      const updatedProduct = await Product.findByIdAndUpdate(
+        id,
+        {
+          $set: setFields,
+          $unset: {
+            flashSalePrice: 1,
+            flashSaleStart: 1,
+            flashSaleEnd: 1,
+          },
+        },
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
+
+      revalidatePath("/");
+      revalidatePath(`/products/${id}`);
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Flash sale disabled successfully",
+          data: updatedProduct,
+        },
+        { status: 200 }
+      );
     }
 
     // ========================================
@@ -584,9 +722,19 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     if (body.isFlashSale === true) {
       const flashSalePrice = Number(body.flashSalePrice);
 
-      const flashSaleStart = new Date(body.flashSaleStart);
+      const flashSaleStart = new Date(
+        typeof body.flashSaleStart === "string" ||
+          typeof body.flashSaleStart === "number"
+          ? body.flashSaleStart
+          : Number.NaN,
+      );
 
-      const flashSaleEnd = new Date(body.flashSaleEnd);
+      const flashSaleEnd = new Date(
+        typeof body.flashSaleEnd === "string" ||
+          typeof body.flashSaleEnd === "number"
+          ? body.flashSaleEnd
+          : Number.NaN,
+      );
 
       // Price validation
       if (!Number.isFinite(flashSalePrice) || flashSalePrice <= 0) {
@@ -640,6 +788,10 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     }
 
     await product.save();
+
+    revalidatePath("/");
+    revalidatePath("/products");
+    revalidatePath(`/products/${id}`);
 
     return NextResponse.json(
       {

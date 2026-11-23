@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { formatBDT } from "@/lib/currency";
 import Link from "next/link";
 
 import type { LowStockProduct } from "@/types/dashboard.types";
@@ -39,16 +40,19 @@ export default function LowStockProducts({
               className="flex items-center justify-between rounded-xl border p-3"
             >
               <div className="flex items-center gap-3">
-                <Image
-                  src={
-                    product.images?.[0]?.url ||
-                    "/placeholder.png"
-                  }
-                  alt={product.title}
-                  width={52}
-                  height={52}
-                  className="rounded-lg object-cover"
-                />
+                {product.images?.[0]?.url ? (
+                  <Image
+                    src={product.images[0].url}
+                    alt={product.title}
+                    width={52}
+                    height={52}
+                    className="rounded-lg object-cover"
+                  />
+                ) : (
+                  <div className="flex h-[52px] w-[52px] items-center justify-center rounded-lg bg-slate-100 text-[10px] text-slate-400">
+                    No img
+                  </div>
+                )}
 
                 <div>
                   <p className="font-medium">
@@ -56,8 +60,7 @@ export default function LowStockProducts({
                   </p>
 
                   <p className="text-sm text-muted-foreground">
-                    $
-                    {Number(product.price).toFixed(2)}
+                    {formatBDT(product.price)}
                   </p>
                 </div>
               </div>

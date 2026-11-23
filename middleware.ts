@@ -5,9 +5,19 @@ export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
+    const isBlocked = token?.status === "blocked";
+    const isAuthenticated = Boolean(token && !isBlocked);
 
     // Admin routes
     if (pathname.startsWith("/admin")) {
+      if (!isAuthenticated) {
+        const loginUrl = new URL("/login", req.url);
+        if (isBlocked) {
+          loginUrl.searchParams.set("error", "blocked");
+        }
+        return NextResponse.redirect(loginUrl);
+      }
+
       if (token?.role !== "admin") {
         return NextResponse.redirect(new URL("/user", req.url));
       }
@@ -15,23 +25,27 @@ export default withAuth(
 
     // Customer/User routes
     if (pathname.startsWith("/user")) {
-      if (!token) {
-        return NextResponse.redirect(new URL("/login", req.url));
+      if (!isAuthenticated) {
+        const loginUrl = new URL("/login", req.url);
+        if (isBlocked) {
+          loginUrl.searchParams.set("error", "blocked");
+        }
+        return NextResponse.redirect(loginUrl);
       }
 
       // Admin users should use the admin dashboard
-      if (token.role === "admin") {
+      if (token?.role === "admin") {
         return NextResponse.redirect(new URL("/admin", req.url));
       }
     }
 
-    // Authenticated users should not access login/signup
+    // Authenticated active users should not access login/register
     if (
       (pathname.startsWith("/login") ||
-        pathname.startsWith("/signup")) &&
-      token
+        pathname.startsWith("/register")) &&
+      isAuthenticated
     ) {
-      if (token.role === "admin") {
+      if (token?.role === "admin") {
         return NextResponse.redirect(new URL("/admin", req.url));
       }
 
@@ -42,9 +56,7 @@ export default withAuth(
   },
   {
     callbacks: {
-      authorized: ({ token }) => {
-        return true;
-      },
+      authorized: () => true,
     },
   }
 );
@@ -54,6 +66,6 @@ export const config = {
     "/admin/:path*",
     "/user/:path*",
     "/login",
-    "/signup",
+    "/register",
   ],
 };

@@ -78,105 +78,76 @@ export function useUpdateUser(){
 
 
 
-      const json =
-        await res.json();
+      const json = (await res.json().catch(() => null)) as {
+        message?: string;
+        data?: unknown;
+      } | null;
 
-
-
-      if(!res.ok){
-        throw new Error(
-          json.message
-        );
+      if (!res.ok) {
+        throw new Error(json?.message || "Failed to update user");
       }
 
-
-      return json.data;
-
+      return json?.data;
     },
 
-
-    onSuccess:()=>{
-
+    onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey:[
-          "users",
-        ],
+        queryKey: ["users"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["admin-dashboard"],
       });
 
-
-      toast.success(
-        "User updated"
-      );
-
+      toast.success("User updated");
     },
 
-
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update user"
+      );
+    },
   });
-
 }
-
-
-
 
 // =========================
 // Delete User
 // =========================
 
-export function useDeleteUser(){
-
-  const queryClient =
-    useQueryClient();
-
+export function useDeleteUser() {
+  const queryClient = useQueryClient();
 
   return useMutation({
-
-    mutationFn:
-    async(id:string)=>{
-
-
-      const res =
-        await fetch(
-          `/api/users/${id}`,
-          {
-            method:"DELETE",
-          }
-        );
-
-
-      const json =
-        await res.json();
-
-
-
-      if(!res.ok){
-        throw new Error(
-          json.message
-        );
-      }
-
-
-      return json;
-
-    },
-
-
-    onSuccess:()=>{
-
-
-      queryClient.invalidateQueries({
-        queryKey:[
-          "users",
-        ],
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/users/${id}`, {
+        method: "DELETE",
       });
 
+      const json = (await res.json().catch(() => null)) as {
+        message?: string;
+      } | null;
 
-      toast.success(
-        "User deleted"
-      );
+      if (!res.ok) {
+        throw new Error(json?.message || "Failed to delete user");
+      }
 
-
+      return json;
     },
 
-  });
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["users"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["admin-dashboard"],
+      });
 
+      toast.success("User deleted");
+    },
+
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete user"
+      );
+    },
+  });
 }

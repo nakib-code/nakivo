@@ -1,12 +1,24 @@
+import { redirect } from "next/navigation";
+
+import { getCurrentUser } from "@/lib/auth";
 import UserHeader from "@/components/user/UserHeader";
 import UserSidebar from "@/components/user/UserSidebar";
 
 
-export default function UserLayout({
+export default async function UserLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (user.role === "admin") {
+    redirect("/admin");
+  }
 
   return (
 

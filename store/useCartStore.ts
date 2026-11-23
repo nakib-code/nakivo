@@ -1,6 +1,33 @@
+import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { getActiveFlashSalePricing } from "@/lib/flash-sale";
 import type { IProduct } from "@/types";
+
+export interface AddToCartResult {
+  added: boolean;
+  reason?: "invalid" | "out_of_stock" | "max_stock";
+}
+
+export interface CartSyncResult {
+  removedCount: number;
+  updatedCount: number;
+}
+
+const emptySubscribe = () => () => {};
+
+/**
+ * Hydration-safe client check using React 19's useSyncExternalStore.
+ * Returns false during SSR/hydration and true on the client without triggering
+ * react-hooks/set-state-in-effect warnings.
+ */
+export function useCartHydrated(): boolean {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+}
 
 export interface CartItem {
   _id: string;
@@ -23,12 +50,13 @@ export interface CartItem {
 interface CartState {
   cart: CartItem[];
 
-  addToCart: (product: IProduct) => void;
+  addToCart: (product: IProduct) => AddToCartResult;
   removeFromCart: (id: string) => void;
   updateQuantity: (
     id: string,
     quantity: number
   ) => void;
+  syncCartWithProducts: (products: IProduct[]) => CartSyncResult;
   clearCart: () => void;
 
   getTotalPrice: () => number;
@@ -36,99 +64,15 @@ interface CartState {
 }
 
 // ========================================
-// DATE NORMALIZER
+// GET ACTIVE PRICE (shared flash sale rule)
 // ========================================
 
-function getDateValue(
-  value: string | Date | undefined
-): number | null {
-  if (!value) {
-    return null;
-  }
-
-  const time =
-    value instanceof Date
-      ? value.getTime()
-      : new Date(value).getTime();
-
-  return Number.isFinite(time)
-    ? time
-    : null;
-}
-
-// ========================================
-// CHECK ACTIVE FLASH SALE
-// ========================================
-
-function isFlashSaleActive(
-  product: IProduct
-): boolean {
-  if (
-    !product.isFlashSale ||
-    product.flashSalePrice === undefined ||
-    !product.flashSaleStart ||
-    !product.flashSaleEnd
-  ) {
-    return false;
-  }
-
-  const now = Date.now();
-
-  const start = getDateValue(
-    product.flashSaleStart
-  );
-
-  const end = getDateValue(
-    product.flashSaleEnd
-  );
-
-  const flashPrice = Number(
-    product.flashSalePrice
-  );
-
-  const regularPrice = Number(
-    product.price
-  );
-
-  if (
-    start === null ||
-    end === null ||
-    !Number.isFinite(flashPrice) ||
-    !Number.isFinite(regularPrice)
-  ) {
-    return false;
-  }
-
-  return (
-    now >= start &&
-    now <= end &&
-    flashPrice > 0 &&
-    flashPrice < regularPrice
-  );
-}
-
-// ========================================
-// GET ACTIVE PRICE
-// ========================================
-
-function getProductPrice(
-  product: IProduct
-) {
-  const activeFlashSale =
-    isFlashSaleActive(product);
-
-  if (activeFlashSale) {
-    return {
-      price: Number(
-        product.flashSalePrice
-      ),
-      isFlashSale: true,
-    };
-  }
+function getProductPrice(product: IProduct) {
+  const pricing = getActiveFlashSalePricing(product);
 
   return {
-    price: Number(product.price),
-    isFlashSale: false,
+    price: pricing.effectivePrice,
+    isFlashSale: pricing.isActive,
   };
 }
 
@@ -148,7 +92,7 @@ export const useCartStore =
 
         addToCart: (product) => {
           if (!product._id) {
-            return;
+            return { added: false, reason: "invalid" };
           }
 
           const currentCart =
@@ -165,7 +109,7 @@ export const useCartStore =
           );
 
           if (stock <= 0) {
-            return;
+            return { added: false, reason: "out_of_stock" };
           }
 
           const {
@@ -183,7 +127,7 @@ export const useCartStore =
               existingItem.quantity >=
               stock
             ) {
-              return;
+              return { added: false, reason: "max_stock" };
             }
 
             set({
@@ -206,7 +150,7 @@ export const useCartStore =
               ),
             });
 
-            return;
+            return { added: true };
           }
 
           // ========================================
@@ -239,6 +183,8 @@ export const useCartStore =
               },
             ],
           });
+
+          return { added: true };
         },
 
         // ========================================
@@ -292,6 +238,68 @@ export const useCartStore =
                   : item
             ),
           });
+        },
+
+        // ========================================
+        // SYNC CART WITH DATABASE PRODUCTS
+        // ========================================
+
+        syncCartWithProducts: (products) => {
+          const productMap = new Map<string, IProduct>();
+
+          for (const product of products) {
+            if (product._id) {
+              productMap.set(String(product._id), product);
+            }
+          }
+
+          let removedCount = 0;
+          let updatedCount = 0;
+          const nextCart: CartItem[] = [];
+
+          for (const item of get().cart) {
+            const fresh = productMap.get(item._id);
+            const freshStock = Number(fresh?.stock ?? 0);
+
+            if (!fresh || !Number.isFinite(freshStock) || freshStock <= 0) {
+              removedCount += 1;
+              continue;
+            }
+
+            const { price, isFlashSale } = getProductPrice(fresh);
+            const regularPrice = Number(fresh.price);
+            const nextQuantity = Math.min(item.quantity, freshStock);
+            const nextImage = fresh.images?.[0]?.url || item.image || "";
+
+            const changed =
+              item.price !== price ||
+              item.regularPrice !== regularPrice ||
+              item.isFlashSale !== isFlashSale ||
+              item.stock !== freshStock ||
+              item.quantity !== nextQuantity ||
+              item.title !== fresh.title;
+
+            if (changed) {
+              updatedCount += 1;
+            }
+
+            nextCart.push({
+              ...item,
+              title: fresh.title,
+              price,
+              regularPrice,
+              isFlashSale,
+              stock: freshStock,
+              quantity: nextQuantity,
+              image: nextImage,
+            });
+          }
+
+          if (removedCount > 0 || updatedCount > 0) {
+            set({ cart: nextCart });
+          }
+
+          return { removedCount, updatedCount };
         },
 
         // ========================================

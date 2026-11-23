@@ -9,19 +9,29 @@ import {
   ShoppingCart,
   Zap,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { formatBDT } from "@/lib/currency";
 import { useCartStore } from "@/store/useCartStore";
 import { IProduct } from "@/types";
 
 
 interface ProductDetailsActionsProps {
   product: IProduct;
+  activePrice?: number;
 }
 
 export default function ProductDetailsActions({
   product,
+  activePrice,
 }: ProductDetailsActionsProps) {
+  const unitPrice =
+    typeof activePrice === "number" &&
+    Number.isFinite(activePrice) &&
+    activePrice > 0
+      ? activePrice
+      : Number(product.price) || 0;
   const router = useRouter();
 
   const [quantity, setQuantity] = useState(1);
@@ -51,11 +61,45 @@ export default function ProductDetailsActions({
   // =========================
 
   const handleAddToCart = () => {
-    if (product.stock <= 0) return;
+    if (product.stock <= 0) {
+      toast.error("This product is currently out of stock");
+      return;
+    }
+
+    let addedCount = 0;
+    let lastReason: string | undefined;
 
     for (let i = 0; i < quantity; i++) {
-      addToCart(product);
+      const result = addToCart(product);
+      if (result.added) {
+        addedCount += 1;
+      } else {
+        lastReason = result.reason;
+        break;
+      }
     }
+
+    if (addedCount === 0) {
+      toast.error(
+        lastReason === "max_stock"
+          ? "Maximum available quantity already in cart"
+          : "Unable to add product to cart"
+      );
+      return;
+    }
+
+    if (addedCount < quantity) {
+      toast.success(
+        `Added ${addedCount} to cart (maximum available stock reached)`
+      );
+      return;
+    }
+
+    toast.success(
+      addedCount === 1
+        ? `${product.title} added to cart`
+        : `Added ${addedCount} × ${product.title} to cart`
+    );
   };
 
   // =========================
@@ -63,10 +107,27 @@ export default function ProductDetailsActions({
   // =========================
 
   const handleBuyNow = () => {
-    if (product.stock <= 0) return;
+    if (product.stock <= 0) {
+      toast.error("This product is currently out of stock");
+      return;
+    }
+
+    let addedCount = 0;
+    let lastReason: string | undefined;
 
     for (let i = 0; i < quantity; i++) {
-      addToCart(product);
+      const result = addToCart(product);
+      if (result.added) {
+        addedCount += 1;
+      } else {
+        lastReason = result.reason;
+        break;
+      }
+    }
+
+    if (addedCount === 0 && lastReason !== "max_stock") {
+      toast.error("Unable to add product to cart");
+      return;
     }
 
     router.push("/checkout");
@@ -106,6 +167,7 @@ export default function ProductDetailsActions({
             type="button"
             variant="ghost"
             size="icon"
+            aria-label="Decrease quantity"
             onClick={decreaseQuantity}
             disabled={quantity <= 1}
           >
@@ -120,6 +182,7 @@ export default function ProductDetailsActions({
             type="button"
             variant="ghost"
             size="icon"
+            aria-label="Increase quantity"
             onClick={increaseQuantity}
             disabled={quantity >= product.stock}
           >
@@ -136,7 +199,7 @@ export default function ProductDetailsActions({
         </span>
 
         <span className="text-xl font-bold">
-          ${(product.price * quantity).toFixed(2)}
+          {formatBDT(unitPrice * quantity)}
         </span>
       </div>
 

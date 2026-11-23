@@ -1,11 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 
 import connectDB from "@/lib/db";
 import User from "@/models/User";
-import mongoose from "mongoose";
-
 import { requireAdmin } from "@/lib/auth";
 
+const ALLOWED_ROLES = ["customer", "admin"] as const;
+const ALLOWED_STATUSES = ["active", "blocked"] as const;
+
+type UserRole = (typeof ALLOWED_ROLES)[number];
+type UserStatus = (typeof ALLOWED_STATUSES)[number];
+
+interface UserUpdatePayload {
+  role?: UserRole;
+  status?: UserStatus;
+}
+
+function isAllowedRole(value: unknown): value is UserRole {
+  return (
+    typeof value === "string" &&
+    (ALLOWED_ROLES as readonly string[]).includes(value)
+  );
+}
+
+function isAllowedStatus(value: unknown): value is UserStatus {
+  return (
+    typeof value === "string" &&
+    (ALLOWED_STATUSES as readonly string[]).includes(value)
+  );
+}
 
 // =========================
 // UPDATE USER
@@ -16,9 +39,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-
   try {
-
     const auth = await requireAdmin();
 
     if (!auth.authorized) {
@@ -33,206 +54,254 @@ export async function PATCH(
       );
     }
 
-
-    await connectDB();
-
-
     const { id } = await params;
-
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         {
-          success:false,
-          message:"Invalid user id",
+          success: false,
+          message: "Invalid user id",
         },
         {
-          status:400,
+          status: 400,
         }
       );
     }
 
+    let body: unknown;
 
-    const body = await req.json();
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid request body",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid request body",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
-    const {
-      role,
-      status,
-    } = body;
+    const { role, status } = body as {
+      role?: unknown;
+      status?: unknown;
+    };
 
+    const updateData: UserUpdatePayload = {};
 
+    if (role !== undefined) {
+      if (!isAllowedRole(role)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid role value",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
 
-    const updateData:any = {};
-
-
-    if(role){
       updateData.role = role;
     }
 
+    if (status !== undefined) {
+      if (!isAllowedStatus(status)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid status value",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
 
-    if(status){
       updateData.status = status;
     }
 
-
-
-    const user =
-      await User.findByIdAndUpdate(
-        id,
-        updateData,
-        {
-          new:true,
-        }
-      )
-      .select("-password");
-
-
-
-    if(!user){
+    if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
         {
-          success:false,
-          message:"User not found",
+          success: false,
+          message: "No valid fields provided for update",
         },
         {
-          status:404,
+          status: 400,
         }
       );
     }
 
+    const isSelf = id === auth.user.id;
 
+    if (isSelf && updateData.role && updateData.role !== "admin") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You cannot demote your own admin account",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (isSelf && updateData.status === "blocked") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You cannot block your own account",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    await connectDB();
+
+    const user = await User.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    }).select("-password");
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
 
     return NextResponse.json(
       {
-        success:true,
-        message:"User updated successfully",
-        data:user,
+        success: true,
+        message: "User updated successfully",
+        data: user,
       },
       {
-        status:200,
+        status: 200,
       }
     );
-
-
-  } catch(error){
-
-
-    console.error(
-      "Update User Error:",
-      error
-    );
-
+  } catch (error) {
+    console.error("Update User Error:", error);
 
     return NextResponse.json(
       {
-        success:false,
-        message:"Failed to update user",
+        success: false,
+        message: "Failed to update user",
       },
       {
-        status:500,
+        status: 500,
       }
     );
-
   }
-
 }
-
-
-
-
 
 // =========================
 // DELETE USER
 // =========================
 
 export async function DELETE(
-  _req:NextRequest,
-  { params }: { params: Promise<{ id:string }> }
-){
-
-
-  try{
-
-
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
     const auth = await requireAdmin();
 
-
-    if(!auth.authorized){
-
+    if (!auth.authorized) {
       return NextResponse.json(
         {
-          success:false,
-          message:auth.message,
+          success: false,
+          message: auth.message,
         },
         {
-          status:auth.status,
+          status: auth.status,
         }
       );
-
     }
 
+    const { id } = await params;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid user id",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (id === auth.user.id) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "You cannot delete your own account",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
     await connectDB();
 
+    const user = await User.findByIdAndDelete(id);
 
-    const {id}=await params;
-
-
-
-    const user =
-      await User.findByIdAndDelete(id);
-
-
-
-    if(!user){
-
+    if (!user) {
       return NextResponse.json(
         {
-          success:false,
-          message:"User not found",
+          success: false,
+          message: "User not found",
         },
         {
-          status:404,
+          status: 404,
         }
       );
-
     }
 
-
+    return NextResponse.json(
+      {
+        success: true,
+        message: "User deleted successfully",
+      },
+      {
+        status: 200,
+      }
+    );
+  } catch (error) {
+    console.error("Delete User Error:", error);
 
     return NextResponse.json(
       {
-        success:true,
-        message:"User deleted successfully",
+        success: false,
+        message: "Failed to delete user",
       },
       {
-        status:200,
+        status: 500,
       }
     );
-
-
-
-  }catch(error){
-
-
-    console.error(
-      "Delete User Error:",
-      error
-    );
-
-
-    return NextResponse.json(
-      {
-        success:false,
-        message:"Failed to delete user",
-      },
-      {
-        status:500,
-      }
-    );
-
   }
-
 }

@@ -14,6 +14,8 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatBDT } from "@/lib/currency";
+import { getActiveFlashSalePricing } from "@/lib/flash-sale";
 
 interface ProductImage {
   url: string;
@@ -67,6 +69,29 @@ interface ProductTableProps {
   onFlashSale: (
     product: Product
   ) => void;
+}
+
+function getFlashSaleStatus(
+  product: Product
+): "active" | "scheduled" | "expired" | null {
+  if (!product.isFlashSale) {
+    return null;
+  }
+
+  const pricing = getActiveFlashSalePricing(product);
+  if (pricing.isActive) {
+    return "active";
+  }
+
+  const startMs = product.flashSaleStart
+    ? new Date(product.flashSaleStart).getTime()
+    : Number.NaN;
+
+  if (Number.isFinite(startMs) && startMs > Date.now()) {
+    return "scheduled";
+  }
+
+  return "expired";
 }
 
 export default function ProductTable({
@@ -181,31 +206,31 @@ export default function ProductTable({
                   {/* Price */}
 
                   <td className="px-5 py-4">
-                    {product.isFlashSale &&
-                    product.flashSalePrice ? (
-                      <div>
-                        <p className="font-semibold text-red-600">
-                          $
-                          {product.flashSalePrice.toFixed(
-                            2
-                          )}
-                        </p>
+                    {(() => {
+                      const flashSaleStatus = getFlashSaleStatus(product);
+                      if (
+                        flashSaleStatus === "active" &&
+                        product.flashSalePrice
+                      ) {
+                        return (
+                          <div>
+                            <p className="font-semibold text-red-600">
+                              {formatBDT(product.flashSalePrice)}
+                            </p>
 
-                        <p className="text-xs text-slate-400 line-through">
-                          $
-                          {product.price.toFixed(
-                            2
-                          )}
+                            <p className="text-xs text-slate-400 line-through">
+                              {formatBDT(product.price)}
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <p className="font-semibold">
+                          {formatBDT(product.price)}
                         </p>
-                      </div>
-                    ) : (
-                      <p className="font-semibold">
-                        $
-                        {product.price.toFixed(
-                          2
-                        )}
-                      </p>
-                    )}
+                      );
+                    })()}
                   </td>
 
                   {/* Stock */}
@@ -225,26 +250,43 @@ export default function ProductTable({
                   {/* Status */}
 
                   <td className="px-5 py-4">
-                    <div className="flex flex-wrap gap-1">
-                      {product.isFeatured && (
-                        <Badge>
-                          Featured
-                        </Badge>
-                      )}
+                    {(() => {
+                      const flashSaleStatus = getFlashSaleStatus(product);
 
-                      {product.isFlashSale && (
-                        <Badge variant="destructive">
-                          Flash Sale
-                        </Badge>
-                      )}
+                      return (
+                        <div className="flex flex-wrap gap-1">
+                          {product.isFeatured && (
+                            <Badge>
+                              Featured
+                            </Badge>
+                          )}
 
-                      {!product.isFeatured &&
-                        !product.isFlashSale && (
-                          <span className="text-xs text-slate-400">
-                            Standard
-                          </span>
-                        )}
-                    </div>
+                          {flashSaleStatus === "active" && (
+                            <Badge variant="destructive">
+                              Flash Sale
+                            </Badge>
+                          )}
+
+                          {flashSaleStatus === "scheduled" && (
+                            <Badge variant="secondary">
+                              Scheduled Sale
+                            </Badge>
+                          )}
+
+                          {flashSaleStatus === "expired" && (
+                            <Badge variant="outline">
+                              Expired Sale
+                            </Badge>
+                          )}
+
+                          {!product.isFeatured && !flashSaleStatus && (
+                            <span className="text-xs text-slate-400">
+                              Standard
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </td>
 
                   {/* Actions */}

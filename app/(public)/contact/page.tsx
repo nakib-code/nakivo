@@ -14,9 +14,9 @@ const contactInfo = [
   {
     icon: Mail,
     title: "Email",
-    value: "hello@bagddash.com",
+    value: "support@nakivo.com",
     description: "We'll reply as soon as possible.",
-    href: "mailto:hello@bagddash.com",
+    href: "mailto:support@nakivo.com",
   },
   {
     icon: Phone,
@@ -74,7 +74,7 @@ export default function ContactPage() {
   };
 
   return (
-    <main className="min-h-screen bg-white text-slate-950">
+    <div className="min-h-screen bg-white text-slate-950">
       {/* Page Header */}
       <section className="border-b border-slate-100">
         <div className={`${containerClass} py-12 sm:py-16 lg:py-20`}>
@@ -178,7 +178,7 @@ export default function ContactPage() {
               </p>
 
               <a
-                href="mailto:hello@bagddash.com"
+                href="mailto:support@nakivo.com"
                 className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-white underline-offset-4 transition hover:underline"
               >
                 Email our team
@@ -204,9 +204,22 @@ export default function ContactPage() {
                 </h2>
 
                 <p className="mt-3 max-w-md text-sm leading-7 text-slate-500">
-                  Thank you for reaching out. This is a frontend demo, so your
-                  message has not actually been sent. Connect the form to your
-                  backend to receive real messages.
+                  Thank you for reaching out. For the fastest response, you can
+                  also email us directly at{" "}
+                  <a
+                    href="mailto:support@nakivo.com"
+                    className="font-semibold text-slate-900 underline underline-offset-4"
+                  >
+                    support@nakivo.com
+                  </a>{" "}
+                  or call{" "}
+                  <a
+                    href="tel:+8801856682104"
+                    className="font-semibold text-slate-900 underline underline-offset-4"
+                  >
+                    +880 1856-682104
+                  </a>
+                  .
                 </p>
 
                 <button
@@ -335,6 +348,6 @@ export default function ContactPage() {
           </div>
         </div>
       </section>
-    </main>
+    </div>
   );
 }

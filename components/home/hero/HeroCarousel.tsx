@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 import Autoplay from "embla-carousel-autoplay";
 import { HeroBanner } from "@/types/hero.types";
@@ -13,18 +13,26 @@ interface Props {
 }
 
 export default function HeroCarousel({ banners }: Props) {
-  const autoplay = Autoplay({
-    delay: 5000,
-    stopOnInteraction: false,
-    stopOnMouseEnter: true,
-  });
+  const plugins = useMemo(
+    () =>
+      banners.length > 1
+        ? [
+            Autoplay({
+              delay: 5000,
+              stopOnInteraction: false,
+              stopOnMouseEnter: true,
+            }),
+          ]
+        : [],
+    [banners.length]
+  );
 
   const [emblaRef, emblaApi] = useEmblaCarousel(
     {
-      loop: true,
+      loop: banners.length > 1,
       align: "start",
     },
-    [autoplay],
+    plugins,
   );
 
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -76,16 +84,17 @@ export default function HeroCarousel({ banners }: Props) {
       </div>
 
       {/* Navigation */}
-      <HeroArrow direction="left" onClick={scrollPrev} />
-
-      <HeroArrow direction="right" onClick={scrollNext} />
-
-      {/* Dots */}
-      <HeroDots
-        count={banners.length}
-        current={selectedIndex}
-        onSelect={scrollTo}
-      />
+      {banners.length > 1 && (
+        <>
+          <HeroArrow direction="left" onClick={scrollPrev} />
+          <HeroArrow direction="right" onClick={scrollNext} />
+          <HeroDots
+            count={banners.length}
+            current={selectedIndex}
+            onSelect={scrollTo}
+          />
+        </>
+      )}
     </div>
   );
 }

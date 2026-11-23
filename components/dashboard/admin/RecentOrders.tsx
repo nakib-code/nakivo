@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { formatBDT } from "@/lib/currency";
 import type { RecentOrder } from "@/types/dashboard.types";
 
 
@@ -68,10 +69,7 @@ export default function RecentOrders({
 
               <div className="text-right">
                 <p className="text-lg font-bold">
-                  $
-                  {Number(
-                    order.totalPrice
-                  ).toFixed(2)}
+                  {formatBDT(order.totalPrice)}
                 </p>
               </div>
             </div>

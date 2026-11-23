@@ -24,14 +24,18 @@ export default function HeroSlide({ banner, priority = false }: Props) {
       "
     >
       {/* ================= BACKGROUND IMAGE ================= */}
-      <Image
-        src={banner.image}
-        alt={banner.title}
-        fill
-        priority={priority}
-        sizes="100vw"
-        className="object-cover"
-      />
+      {banner.image ? (
+        <Image
+          src={banner.image}
+          alt={banner.title}
+          fill
+          priority={priority}
+          sizes="100vw"
+          className="object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950" />
+      )}
       {/* ================= OVERLAY ================= */}
       <div
         className="
@@ -109,22 +113,41 @@ export default function HeroSlide({ banner, priority = false }: Props) {
           )}
 
           {/* ================= TITLE ================= */}
-          <motion.h1
-            initial={{ opacity: 0, y: 25 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="
-              line-clamp-2
-              text-2xl
-              font-extrabold
-              leading-tight
-              tracking-tight
-              sm:text-4xl
-              md:text-6xl
-            "
-          >
-            {banner.title}
-          </motion.h1>
+          {priority ? (
+            <motion.h1
+              initial={{ opacity: 0, y: 25 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="
+                line-clamp-2
+                text-2xl
+                font-extrabold
+                leading-tight
+                tracking-tight
+                sm:text-4xl
+                md:text-6xl
+              "
+            >
+              {banner.title}
+            </motion.h1>
+          ) : (
+            <motion.h2
+              initial={{ opacity: 0, y: 25 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="
+                line-clamp-2
+                text-2xl
+                font-extrabold
+                leading-tight
+                tracking-tight
+                sm:text-4xl
+                md:text-6xl
+              "
+            >
+              {banner.title}
+            </motion.h2>
+          )}
 
           {/* ================= DESCRIPTION ================= */}
           <motion.p

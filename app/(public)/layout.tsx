@@ -1,12 +1,19 @@
 import Footer from "@/components/Footer";
 import Navbar from "@/components/navbar/Navbar";
+import { getWebsiteSettings } from "@/service/settings/website-settings.service";
 
-export default function PublicLayout({ children }: { children: React.ReactNode }) {
+export default async function PublicLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { siteName, logoUrl } = await getWebsiteSettings();
+
   return (
     <>
-      <Navbar />
+      <Navbar siteName={siteName} logoUrl={logoUrl} />
       <main>{children}</main>
-      <Footer/>
+      <Footer siteName={siteName} logoUrl={logoUrl} />
     </>
   );
 }

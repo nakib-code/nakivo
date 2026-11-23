@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { Clock, Zap, Flame } from "lucide-react";
 
+import { getActiveFlashSalePricing } from "@/lib/flash-sale";
 import type { IProduct } from "@/types";
 import FlashSaleCard from "../products/FlashSaleCard";
 
@@ -31,32 +32,11 @@ export default function FlashSale({
   }, []);
 
   const activeFlashSaleProducts = products.filter((product) => {
-    if (
-      !product.isFlashSale ||
-      !product.flashSaleStart ||
-      !product.flashSaleEnd ||
-      currentTime === null
-    ) {
+    if (currentTime === null) {
       return false;
     }
 
-    const startTime = new Date(
-      product.flashSaleStart
-    ).getTime();
-
-    const endTime = new Date(
-      product.flashSaleEnd
-    ).getTime();
-
-    if (
-      !Number.isFinite(startTime) ||
-      !Number.isFinite(endTime) ||
-      startTime >= endTime
-    ) {
-      return false;
-    }
-
-    return currentTime >= startTime && currentTime < endTime;
+    return getActiveFlashSalePricing(product, currentTime).isActive;
   });
 
   if (activeFlashSaleProducts.length === 0) {

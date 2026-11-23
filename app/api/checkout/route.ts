@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isValidObjectId } from "mongoose";
 
 import connectDB from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
@@ -27,14 +28,37 @@ export async function POST(req: NextRequest) {
     await connectDB();
 
     // Request body
-    const body = await req.json();
-    const { orderId, paymentMethod } = body;
+    let body: { orderId?: unknown; paymentMethod?: unknown };
 
-    if (!orderId) {
+    try {
+      body = await req.json();
+    } catch {
       return NextResponse.json(
         {
           success: false,
-          message: "Order ID is required",
+          message: "Invalid request body",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid request body",
+        },
+        { status: 400 }
+      );
+    }
+
+    const { orderId, paymentMethod } = body;
+
+    if (typeof orderId !== "string" || !isValidObjectId(orderId)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Valid order ID is required",
         },
         { status: 400 }
       );

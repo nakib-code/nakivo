@@ -1,7 +1,9 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { getCategories } from "@/service/category.service";
+import { getAllCategories } from "@/service/category/category.service";
 import { getProducts } from "@/service/product.service";
+import { getWebsiteSettings } from "@/service/settings/website-settings.service";
 import CategoryProducts from "@/components/category/CategoryProducts";
 
 interface CategoryPageProps {
@@ -10,16 +12,46 @@ interface CategoryPageProps {
   }>;
 }
 
-export default async function CategoryPage({ params }: CategoryPageProps) {
+export async function generateMetadata({
+  params,
+}: CategoryPageProps): Promise<Metadata> {
   const { slug } = await params;
-
-  const categories = await getCategories();
-
+  const [categories, { siteName }] = await Promise.all([
+    getAllCategories(),
+    getWebsiteSettings(),
+  ]);
   const category = categories.find((item) => item.slug === slug);
 
   if (!category) {
+    return { title: "Category Not Found" };
+  }
+
+  return {
+    title: category.name,
+    description:
+      category.description ||
+      `Explore ${category.name} products at ${siteName}.`,
+  };
+}
+
+export default async function CategoryPage({ params }: CategoryPageProps) {
+  const { slug } = await params;
+
+  const rawCategories = await getAllCategories();
+
+  const rawCategory = rawCategories.find((item) => item.slug === slug);
+
+  if (!rawCategory) {
     notFound();
   }
+
+  const category = {
+    _id: String(rawCategory._id),
+    name: rawCategory.name,
+    slug: rawCategory.slug,
+    description: rawCategory.description ?? "",
+    image: rawCategory.image ?? "",
+  };
 
   const products = await getProducts({
     category: category.name,
@@ -27,7 +59,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
   });
 
   return (
-    <main
+    <div
       className="
         mx-auto
         w-full
@@ -39,6 +71,6 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
         2xl:px-12"
     >
       <CategoryProducts category={category} products={products} />
-    </main>
+    </div>
   );
 }

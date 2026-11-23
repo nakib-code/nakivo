@@ -22,7 +22,7 @@ export default function QueryProvider({
             retry: 1,
           },
           mutations: {
-            retry: 1,
+            retry: 0,
           },
         },
       })

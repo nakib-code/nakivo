@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
+import { useSession } from "next-auth/react";
 
 import {
   Loader2,
@@ -18,9 +20,10 @@ import {
   useDeleteUser,
 } from "@/hooks/useUsers";
 
-
 export default function AdminUsersPage() {
-
+  const { data: session } = useSession();
+  const currentUserId = session?.user?.id ?? "";
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
 
   const {
     data: users = [],
@@ -28,80 +31,69 @@ export default function AdminUsersPage() {
     isError,
   } = useGetUsers();
 
-
-
   const updateUser = useUpdateUser();
-
   const deleteUser = useDeleteUser();
 
-
-
-
-
-  const handleBlock = (
-    id:string,
-    status:string
-  )=>{
-
-    updateUser.mutate({
-
-      id,
-
-      data:{
-        status:
-          status === "active"
-          ? "blocked"
-          : "active",
-      },
-
-    });
-
-  };
-
-
-
-
-
-
-  const handleMakeAdmin = (
-    id:string
-  )=>{
-
-    updateUser.mutate({
-
-      id,
-
-      data:{
-        role:"admin",
-      },
-
-    });
-
-  };
-
-
-
-
-
-
-  const handleDelete = (
-    id:string
-  )=>{
-
-
-    const confirmDelete =
-      window.confirm(
-        "Are you sure you want to delete this user?"
-      );
-
-
-    if(!confirmDelete)
+  const handleBlock = (id: string, status: string, name: string) => {
+    if (id === currentUserId) {
       return;
+    }
 
+    const nextStatus = status === "active" ? "blocked" : "active";
+    const confirmed = window.confirm(
+      nextStatus === "blocked"
+        ? `Are you sure you want to block ${name || "this user"}?`
+        : `Are you sure you want to unblock ${name || "this user"}?`
+    );
 
+    if (!confirmed) return;
 
-    deleteUser.mutate(id);
+    setPendingUserId(id);
+    updateUser.mutate(
+      {
+        id,
+        data: { status: nextStatus },
+      },
+      {
+        onSettled: () => setPendingUserId(null),
+      }
+    );
+  };
 
+  const handleMakeAdmin = (id: string, name: string) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to promote ${name || "this user"} to Admin?`
+    );
+
+    if (!confirmed) return;
+
+    setPendingUserId(id);
+    updateUser.mutate(
+      {
+        id,
+        data: { role: "admin" },
+      },
+      {
+        onSettled: () => setPendingUserId(null),
+      }
+    );
+  };
+
+  const handleDelete = (id: string, name: string) => {
+    if (id === currentUserId) {
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to permanently delete ${name || "this user"}?`
+    );
+
+    if (!confirmDelete) return;
+
+    setPendingUserId(id);
+    deleteUser.mutate(id, {
+      onSettled: () => setPendingUserId(null),
+    });
   };
 
 
@@ -375,24 +367,25 @@ export default function AdminUsersPage() {
 
 
             <tbody>
+            {users.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={6}
+                  className="px-5 py-12 text-center text-sm text-slate-500"
+                >
+                  No users found.
+                </td>
+              </tr>
+            ) : (
+              users.map((user) => {
+                const userId = user._id.toString();
+                const isSelf = userId === currentUserId;
+                const isRowPending = pendingUserId === userId;
 
-
-            {
-              users.map(
-                (user)=>(
-
-
+                return (
                 <tr
-
-                  key={
-                    user._id.toString()
-                  }
-
-                  className="
-                    border-b
-                    last:border-0
-                  "
-
+                  key={userId}
+                  className="border-b last:border-0"
                 >
 
 
@@ -614,137 +607,68 @@ export default function AdminUsersPage() {
 
                   {/* Actions */}
 
-                  <td className="
-                    px-5
-                    py-4
-                  ">
-
-
-                    <div className="
-                      flex
-                      gap-2
-                    ">
-
-
-
+                  <td className="px-5 py-4">
+                    <div className="flex gap-2">
                       <button
-
-                        onClick={()=> 
-                          handleBlock(
-                            user._id.toString(),
-                            user.status
-                          )
+                        type="button"
+                        disabled={isSelf || isRowPending}
+                        title={
+                          isSelf
+                            ? "You cannot block your own account"
+                            : user.status === "active"
+                              ? "Block user"
+                              : "Unblock user"
                         }
-
-                        className="
-                          rounded-lg
-                          border
-                          p-2
-                        "
-
+                        aria-label={
+                          user.status === "active"
+                            ? `Block ${user.name}`
+                            : `Unblock ${user.name}`
+                        }
+                        onClick={() =>
+                          handleBlock(userId, user.status, user.name)
+                        }
+                        className="rounded-lg border p-2 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-
-                        <UserX
-                          className="
-                            h-4
-                            w-4
-                          "
-                        />
-
+                        {isRowPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <UserX className="h-4 w-4" />
+                        )}
                       </button>
 
-
-
-
-
-
-
-
-                      {
-                        user.role !== "admin" && (
-
-                          <button
-
-                            onClick={()=>
-                              handleMakeAdmin(
-                                user._id.toString()
-                              )
-                            }
-
-                            className="
-                              rounded-lg
-                              border
-                              p-2
-                            "
-
-                          >
-
-                            <ShieldCheck
-                              className="
-                                h-4
-                                w-4
-                              "
-                            />
-
-                          </button>
-
-                        )
-                      }
-
-
-
-
-
-
-
+                      {user.role !== "admin" && (
+                        <button
+                          type="button"
+                          disabled={isRowPending}
+                          title="Promote to Admin"
+                          aria-label={`Promote ${user.name} to admin`}
+                          onClick={() => handleMakeAdmin(userId, user.name)}
+                          className="rounded-lg border p-2 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <ShieldCheck className="h-4 w-4" />
+                        </button>
+                      )}
 
                       <button
-
-                        onClick={()=>
-                          handleDelete(
-                            user._id.toString()
-                          )
+                        type="button"
+                        disabled={isSelf || isRowPending}
+                        title={
+                          isSelf
+                            ? "You cannot delete your own account"
+                            : "Delete user"
                         }
-
-                        className="
-                          rounded-lg
-                          border
-                          p-2
-                          text-red-600
-                        "
-
+                        aria-label={`Delete ${user.name}`}
+                        onClick={() => handleDelete(userId, user.name)}
+                        className="rounded-lg border p-2 text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-
-                        <Trash2
-                          className="
-                            h-4
-                            w-4
-                          "
-                        />
-
+                        <Trash2 className="h-4 w-4" />
                       </button>
-
-
-
-
-
                     </div>
-
-
                   </td>
-
-
-
-
-
                 </tr>
-
-
-                )
-              )
-            }
-
-
+                );
+              })
+            )}
             </tbody>
 
 

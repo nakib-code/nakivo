@@ -1,8 +1,11 @@
+import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
+import { isValidObjectId } from "mongoose";
 
+import { requireAdmin } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
-import { uploadToCloudinary } from "@/lib/cloudinary";
+import { deleteFromCloudinary, uploadToCloudinary } from "@/lib/cloudinary";
 
 // ========================================
 // CONSTANTS
@@ -12,6 +15,12 @@ const DEFAULT_LIMIT = 12;
 const MAX_LIMIT = 24;
 const MAX_IMAGES = 5;
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+]);
 
 // ========================================
 // GET PRODUCTS
@@ -32,21 +41,64 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search");
     const featured = searchParams.get("featured");
     const flashSale = searchParams.get("flashSale");
+    const sort = searchParams.get("sort");
+    const idsParam = searchParams.get("ids");
+    const includeStats = searchParams.get("includeStats") === "true";
 
     const pageValue = searchParams.get("page");
     const limitValue = searchParams.get("limit");
+
+    // Fast path for cart/checkout stock & price validation by product IDs
+    if (idsParam) {
+      const ids = Array.from(
+        new Set(
+          idsParam
+            .split(",")
+            .map((id) => id.trim())
+            .filter((id) => isValidObjectId(id))
+        )
+      ).slice(0, 50);
+
+      if (ids.length === 0) {
+        return NextResponse.json(
+          {
+            success: true,
+            data: [],
+          },
+          { status: 200 }
+        );
+      }
+
+      const products = await Product.find({ _id: { $in: ids } })
+        .select(
+          "title price stock images isFlashSale flashSalePrice flashSaleStart flashSaleEnd"
+        )
+        .lean();
+
+      return NextResponse.json(
+        {
+          success: true,
+          data: products,
+        },
+        { status: 200 }
+      );
+    }
 
     // ========================================
     // Pagination
     // ========================================
 
-    const page = Math.max(
-      Number(pageValue) || 1,
-      1
-    );
+    const parsedPage = Number(pageValue);
+    const page =
+      Number.isFinite(parsedPage) && parsedPage >= 1
+        ? Math.floor(parsedPage)
+        : 1;
 
+    const parsedLimit = Number(limitValue);
     const requestedLimit =
-      Number(limitValue) || DEFAULT_LIMIT;
+      Number.isFinite(parsedLimit) && parsedLimit >= 1
+        ? Math.floor(parsedLimit)
+        : DEFAULT_LIMIT;
 
     const limit = Math.min(
       Math.max(requestedLimit, 1),
@@ -62,7 +114,7 @@ export async function GET(req: NextRequest) {
     const query: Record<string, unknown> = {};
 
     // Category
-    if (category) {
+    if (category && category !== "all") {
       query.category = category;
     }
 
@@ -84,27 +136,78 @@ export async function GET(req: NextRequest) {
       query.isFeatured = true;
     }
 
-    // Flash Sale
-    if (flashSale === "true") {
+    // Active Flash Sale window
+    if (flashSale === "true" || sort === "deals") {
+      const now = new Date();
       query.isFlashSale = true;
+      query.flashSalePrice = { $gt: 0 };
+      query.flashSaleStart = { $lte: now };
+      query.flashSaleEnd = { $gt: now };
     }
+
+    const sortOrder: Record<string, 1 | -1> =
+      sort === "price-low"
+        ? { price: 1, createdAt: -1 }
+        : sort === "price-high"
+          ? { price: -1, createdAt: -1 }
+          : { createdAt: -1 };
 
     // ========================================
     // Get Total Count + Products
     // ========================================
 
-    const [total, products] = await Promise.all([
+    const [total, products, statsResult] = await Promise.all([
       Product.countDocuments(query),
 
       Product.find(query)
         .select(
           "title description price category stock images ratings isFeatured isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt updatedAt"
         )
-        .sort({ createdAt: -1 })
+        .sort(sortOrder)
         .skip(skip)
         .limit(limit)
         .lean(),
+
+      includeStats
+        ? Product.aggregate<{
+            totalProducts: number;
+            inStock: number;
+            outOfStock: number;
+            featuredProducts: number;
+            flashSaleProducts: number;
+          }>([
+            { $match: query },
+            {
+              $group: {
+                _id: null,
+                totalProducts: { $sum: 1 },
+                inStock: {
+                  $sum: { $cond: [{ $gt: ["$stock", 0] }, 1, 0] },
+                },
+                outOfStock: {
+                  $sum: { $cond: [{ $lte: ["$stock", 0] }, 1, 0] },
+                },
+                featuredProducts: {
+                  $sum: { $cond: [{ $eq: ["$isFeatured", true] }, 1, 0] },
+                },
+                flashSaleProducts: {
+                  $sum: { $cond: [{ $eq: ["$isFlashSale", true] }, 1, 0] },
+                },
+              },
+            },
+          ])
+        : Promise.resolve(null),
     ]);
+
+    const stats = includeStats
+      ? {
+          totalProducts: statsResult?.[0]?.totalProducts ?? 0,
+          inStock: statsResult?.[0]?.inStock ?? 0,
+          outOfStock: statsResult?.[0]?.outOfStock ?? 0,
+          featuredProducts: statsResult?.[0]?.featuredProducts ?? 0,
+          flashSaleProducts: statsResult?.[0]?.flashSaleProducts ?? 0,
+        }
+      : undefined;
 
     // ========================================
     // Pagination Information
@@ -122,6 +225,8 @@ export async function GET(req: NextRequest) {
         success: true,
 
         data: products,
+
+        ...(stats ? { stats } : {}),
 
         pagination: {
           currentPage: page,
@@ -164,13 +269,37 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireAdmin();
+
+    if (!auth.authorized) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: auth.message,
+        },
+        { status: auth.status }
+      );
+    }
+
     await connectDB();
 
     // ========================================
     // Get FormData
     // ========================================
 
-    const formData = await req.formData();
+    let formData: FormData;
+
+    try {
+      formData = await req.formData();
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid form data",
+        },
+        { status: 400 }
+      );
+    }
 
     const title = formData
       .get("title")
@@ -184,7 +313,8 @@ export async function POST(req: NextRequest) {
 
     const priceValue = formData
       .get("price")
-      ?.toString();
+      ?.toString()
+      .trim();
 
     const category = formData
       .get("category")
@@ -193,7 +323,8 @@ export async function POST(req: NextRequest) {
 
     const stockValue = formData
       .get("stock")
-      ?.toString();
+      ?.toString()
+      .trim();
 
     // ========================================
     // Validate Required Fields
@@ -242,7 +373,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (stockValue === undefined) {
+    if (!stockValue) {
       return NextResponse.json(
         {
           success: false,
@@ -262,12 +393,12 @@ export async function POST(req: NextRequest) {
 
     if (
       !Number.isFinite(price) ||
-      price < 0
+      price <= 0
     ) {
       return NextResponse.json(
         {
           success: false,
-          message: "Invalid product price",
+          message: "Product price must be greater than 0",
         },
         { status: 400 }
       );
@@ -330,12 +461,12 @@ export async function POST(req: NextRequest) {
     // ========================================
 
     for (const file of imageFiles) {
-      if (!file.type.startsWith("image/")) {
+      if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
         return NextResponse.json(
           {
             success: false,
             message:
-              `${file.name} is not a valid image`,
+              `${file.name} must be a JPG, PNG, WebP, or AVIF image`,
           },
           { status: 400 }
         );
@@ -357,30 +488,38 @@ export async function POST(req: NextRequest) {
     // Upload Images to Cloudinary
     // ========================================
 
-    let uploadedImages;
+    const uploadResults = await Promise.allSettled(
+      imageFiles.map((file) =>
+        uploadToCloudinary(file, "ecommerce/products")
+      )
+    );
 
-    try {
-      uploadedImages = await Promise.all(
-        imageFiles.map((file) =>
-          uploadToCloudinary(
-            file,
-            "ecommerce/products"
-          )
-        )
-      );
-    } catch (error) {
-      console.error(
-        "Cloudinary Upload Error:",
-        error
+    const succeededUploads = uploadResults
+      .filter(
+        (
+          res
+        ): res is PromiseFulfilledResult<{
+          secure_url: string;
+          public_id: string;
+        }> => res.status === "fulfilled"
+      )
+      .map((res) => res.value);
+
+    const failedUpload = uploadResults.find(
+      (res) => res.status === "rejected"
+    );
+
+    if (failedUpload) {
+      console.error("Cloudinary Upload Error:", failedUpload);
+
+      await Promise.allSettled(
+        succeededUploads.map((img) => deleteFromCloudinary(img.public_id))
       );
 
       return NextResponse.json(
         {
           success: false,
-          message:
-            error instanceof Error
-              ? `Image upload failed: ${error.message}`
-              : "Image upload failed",
+          message: "Image upload failed",
         },
         { status: 500 }
       );
@@ -390,26 +529,36 @@ export async function POST(req: NextRequest) {
     // Prepare Images
     // ========================================
 
-    const images = uploadedImages.map(
-      (image) => ({
-        url: image.secure_url,
-        publicId: image.public_id,
-      })
-    );
+    const images = succeededUploads.map((image) => ({
+      url: image.secure_url,
+      publicId: image.public_id,
+    }));
 
     // ========================================
     // Create Product
     // ========================================
 
-    const product = await Product.create({
-      title,
-      description,
-      price,
-      category,
-      stock,
-      images,
-      ratings: 0,
-    });
+    let product;
+
+    try {
+      product = await Product.create({
+        title,
+        description,
+        price,
+        category,
+        stock,
+        images,
+        ratings: 0,
+      });
+    } catch (createError) {
+      await Promise.allSettled(
+        images.map((img) => deleteFromCloudinary(img.publicId))
+      );
+      throw createError;
+    }
+
+    revalidatePath("/");
+    revalidatePath("/products");
 
     // ========================================
     // Response
@@ -418,8 +567,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        message:
-          "Product created successfully",
+        message: "Product created successfully",
         data: product,
       },
       {
@@ -427,18 +575,12 @@ export async function POST(req: NextRequest) {
       }
     );
   } catch (error) {
-    console.error(
-      "POST Product Error:",
-      error
-    );
+    console.error("POST Product Error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to create product",
+        message: "Failed to create product",
       },
       {
         status: 500,

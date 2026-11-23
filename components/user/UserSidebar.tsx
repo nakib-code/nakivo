@@ -32,7 +32,11 @@ const menuItems = [
 ];
 
 
-export default function UserSidebar() {
+interface UserSidebarProps {
+  onNavigate?: () => void;
+}
+
+export default function UserSidebar({ onNavigate }: UserSidebarProps) {
 
   const pathname = usePathname();
 
@@ -67,7 +71,9 @@ export default function UserSidebar() {
           const Icon = item.icon;
 
           const active =
-            pathname === item.href;
+            item.href === "/user"
+              ? pathname === "/user"
+              : pathname.startsWith(item.href);
 
 
           return (
@@ -75,6 +81,7 @@ export default function UserSidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               className={`
                 flex
                 items-center
@@ -109,6 +116,7 @@ export default function UserSidebar() {
 
         <Link
           href="/"
+          onClick={onNavigate}
           className="
             mt-4
             flex
@@ -137,6 +145,7 @@ export default function UserSidebar() {
       {/* Logout */}
 
       <button
+        type="button"
         onClick={()=>signOut({
           callbackUrl:"/login"
         })}

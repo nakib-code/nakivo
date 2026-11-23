@@ -49,6 +49,9 @@ export default function CreateHeroPage() {
   const [buttonLink, setButtonLink] =
     useState("/products");
 
+  const [order, setOrder] = useState("0");
+  const [active, setActive] = useState(true);
+
 
   const [image, setImage] =
     useState<File | null>(null);
@@ -213,6 +216,8 @@ export default function CreateHeroPage() {
         buttonLink.trim()
       );
 
+      formData.append("order", order.trim() || "0");
+      formData.append("active", String(active));
 
       formData.append(
         "image",
@@ -432,8 +437,31 @@ export default function CreateHeroPage() {
 
               />
 
+            </div>
 
+            <div className="grid gap-4 sm:grid-cols-2 sm:items-center">
+              <label className="block text-sm font-medium">
+                Display Order
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={order}
+                  onChange={(e) => setOrder(e.target.value)}
+                  placeholder="0"
+                  className="mt-1.5"
+                />
+              </label>
 
+              <label className="flex cursor-pointer items-center gap-2.5 pt-4 text-sm font-medium sm:pt-5">
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onChange={(e) => setActive(e.target.checked)}
+                  className="h-4 w-4 accent-black"
+                />
+                Active (show on homepage)
+              </label>
             </div>
 
 

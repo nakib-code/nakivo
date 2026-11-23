@@ -84,11 +84,21 @@ export function useCreateOrder() {
 // Admin Only
 // ==================================================
 
+interface UpdateOrderStatusResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    _id: string;
+    status: OrderStatus;
+    isPaid: boolean;
+  };
+}
+
 export function useUpdateOrderStatus() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    unknown,
+    UpdateOrderStatusResponse,
     Error,
     UpdateOrderStatusPayload
   >({
@@ -111,21 +121,32 @@ export function useUpdateOrderStatus() {
         }
       );
 
-      const result = await response.json();
+      const result = (await response.json().catch(() => null)) as
+        | UpdateOrderStatusResponse
+        | null;
 
       if (!response.ok) {
         throw new Error(
-          result.message ||
+          result?.message ||
             "Failed to update order status"
         );
       }
 
-      return result;
+      return result ?? { success: true, message: "Order status updated" };
     },
 
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["orders"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["admin-orders"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["admin-dashboard"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["products"],
       });
     },
   });

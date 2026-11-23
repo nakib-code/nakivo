@@ -40,6 +40,11 @@ const CategorySchema = new Schema<ICategory>(
     default: "",
   },
 
+  imagePublicId: {
+    type: String,
+    default: "",
+  },
+
 },
 {
   timestamps:true,

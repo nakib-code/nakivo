@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  ImageIcon,
   LayoutDashboard,
   Package,
   Tags,
@@ -43,7 +44,7 @@ const menuItems = [
   {
     label: "Hero",
     href: "/admin/hero",
-    icon: Users,
+    icon: ImageIcon,
   },
     {
     label: "Settings",
@@ -52,15 +53,30 @@ const menuItems = [
   },
 ];
 
-export default function AdminSidebar() {
+interface AdminSidebarProps {
+  onNavigate?: () => void;
+  mobile?: boolean;
+}
+
+export default function AdminSidebar({
+  onNavigate,
+  mobile = false,
+}: AdminSidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r bg-white">
+    <aside
+      className={
+        mobile
+          ? "flex h-full w-64 flex-col bg-white"
+          : "fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r bg-white"
+      }
+    >
       {/* Logo */}
       <div className="flex h-16 items-center border-b px-6">
         <Link
           href="/admin"
+          onClick={onNavigate}
           className="text-2xl font-black tracking-tight"
         >
           STORE<span className="text-blue-600">.</span>
@@ -68,7 +84,7 @@ export default function AdminSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 p-4">
+      <nav className="flex-1 space-y-1 overflow-y-auto p-4">
         {menuItems.map((item) => {
           const Icon = item.icon;
 
@@ -81,6 +97,7 @@ export default function AdminSidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition ${
                 isActive
                   ? "bg-black text-white"
@@ -98,6 +115,7 @@ export default function AdminSidebar() {
       <div className="border-t p-4">
         <Link
           href="/"
+          onClick={onNavigate}
           className="mb-2 flex items-center gap-3 rounded-lg px-4 py-3 text-sm text-slate-600 hover:bg-slate-100"
         >
           <Store className="h-5 w-5" />
@@ -105,6 +123,7 @@ export default function AdminSidebar() {
         </Link>
 
         <button
+          type="button"
           onClick={() => signOut({ callbackUrl: "/login" })}
           className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm text-red-600 hover:bg-red-50"
         >

@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { useCartStore } from "@/store/useCartStore";
+import { useCartHydrated, useCartStore } from "@/store/useCartStore";
 import { useCategories } from "@/hooks/useCategories";
 
 import Logo from "./Logo";
@@ -18,13 +18,23 @@ import { navLinks } from "./nav-links";
 import UserProfileDropdown from "./UserProfileDropdown";
 import SearchBar from "./SearchBar";
 
-export default function MobileDrawer() {
+interface MobileDrawerProps {
+  siteName?: string;
+  logoUrl?: string;
+}
+
+export default function MobileDrawer({
+  siteName = "NAKIVO",
+  logoUrl = "",
+}: MobileDrawerProps) {
   const [open, setOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
 
-  const totalItems = useCartStore((state) =>
+  const hydrated = useCartHydrated();
+  const storedItems = useCartStore((state) =>
     state.getTotalItems()
   );
+  const totalItems = hydrated ? storedItems : 0;
 
   const {
     data: categories = [],
@@ -57,7 +67,7 @@ export default function MobileDrawer() {
         {/* Logo */}
 
         <div className="min-w-0 shrink-0">
-          <Logo />
+          <Logo siteName={siteName} logoUrl={logoUrl} />
         </div>
 
         {/* Right Actions */}
@@ -158,6 +168,8 @@ export default function MobileDrawer() {
       ======================================== */}
 
       <aside
+        aria-hidden={!open}
+        inert={!open}
         className={`
           fixed
           left-0
@@ -193,7 +205,7 @@ export default function MobileDrawer() {
           "
         >
           <div className="min-w-0">
-            <Logo />
+            <Logo siteName={siteName} logoUrl={logoUrl} />
           </div>
 
           <Button
@@ -210,7 +222,7 @@ export default function MobileDrawer() {
         {/* Search */}
 
         <div className="shrink-0 border-b p-4">
-          <SearchBar />
+          <SearchBar onSearch={closeDrawer} />
         </div>
 
         {/* Navigation */}

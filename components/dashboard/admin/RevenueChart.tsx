@@ -10,6 +10,7 @@ import {
   CartesianGrid,
 } from "recharts";
 
+import { formatBDT } from "@/lib/currency";
 import type { MonthlySale } from "@/types/dashboard.types";
 
 type Props = {
@@ -71,7 +72,7 @@ export default function RevenueChart({
 
             <YAxis
               tickFormatter={(value) =>
-                `$${value}`
+                `৳${value}`
               }
               tickLine={false}
               axisLine={false}
@@ -79,7 +80,7 @@ export default function RevenueChart({
 
             <Tooltip
               formatter={(value) => [
-                `$${Number(value).toFixed(2)}`,
+                formatBDT(value),
                 "Revenue",
               ]}
             />

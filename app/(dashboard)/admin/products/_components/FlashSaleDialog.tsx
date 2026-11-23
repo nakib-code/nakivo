@@ -244,6 +244,59 @@ export default function FlashSaleDialog({
   };
 
   /* =======================================================
+     DISABLE FLASH SALE
+  ======================================================= */
+
+  const handleDisableFlashSale = async () => {
+    try {
+      setLoading(true);
+
+      const response = await fetch(`/api/products/${product._id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          isFlashSale: false,
+        }),
+      });
+
+      const result = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        message?: string;
+        data?: Product;
+      } | null;
+
+      if (!response.ok || !result?.success) {
+        throw new Error(
+          result?.message || "Failed to disable flash sale."
+        );
+      }
+
+      const updatedProduct: Product = result.data ?? {
+        ...product,
+        isFlashSale: false,
+        flashSalePrice: undefined,
+        flashSaleStart: undefined,
+        flashSaleEnd: undefined,
+      };
+
+      toast.success("Flash sale disabled successfully.");
+      onSuccess?.(updatedProduct);
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Disable Flash Sale Error:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to disable flash sale."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* =======================================================
      UI
   ======================================================= */
 
@@ -293,9 +346,9 @@ export default function FlashSaleDialog({
             </label>
 
             <Input
-              value={`$${Number(
-                product.price
-              ).toFixed(2)}`}
+              value={`৳${Number(product.price || 0).toLocaleString("en-BD", {
+                maximumFractionDigits: 2,
+              })}`}
               disabled
               className="bg-slate-50"
             />
@@ -370,41 +423,56 @@ export default function FlashSaleDialog({
 
           {/* Actions */}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() =>
-                onOpenChange(false)
-              }
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-
-            <Button
-              type="submit"
-              disabled={loading}
-              className="bg-red-500 text-white hover:bg-red-600"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Zap
-                    className="mr-2 h-4 w-4"
-                    fill="currentColor"
-                  />
-
-                  {product.isFlashSale
-                    ? "Update Flash Sale"
-                    : "Activate Flash Sale"}
-                </>
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+            <div>
+              {product.isFlashSale && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleDisableFlashSale}
+                  disabled={loading}
+                >
+                  Disable Flash Sale
+                </Button>
               )}
-            </Button>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  onOpenChange(false)
+                }
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                disabled={loading}
+                className="bg-red-500 text-white hover:bg-red-600"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Zap
+                      className="mr-2 h-4 w-4"
+                      fill="currentColor"
+                    />
+
+                    {product.isFlashSale
+                      ? "Update Flash Sale"
+                      : "Activate Flash Sale"}
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>

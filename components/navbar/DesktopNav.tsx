@@ -4,25 +4,35 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, Search, ShoppingBag } from "lucide-react";
 
-import { useCartStore } from "@/store/useCartStore";
+import { useCartHydrated, useCartStore } from "@/store/useCartStore";
 
 import Logo from "./Logo";
 import UserProfileDropdown from "./UserProfileDropdown";
 import CategoryMegaMenu from "./CategoryMegaMenu";
 import { navLinks } from "./nav-links";
 
-export default function DesktopNav() {
+interface DesktopNavProps {
+  siteName?: string;
+  logoUrl?: string;
+}
+
+export default function DesktopNav({
+  siteName = "NAKIVO",
+  logoUrl = "",
+}: DesktopNavProps) {
   const pathname = usePathname();
 
-  const totalItems = useCartStore((state) =>
+  const hydrated = useCartHydrated();
+  const storedItems = useCartStore((state) =>
     state.getTotalItems()
   );
+  const totalItems = hydrated ? storedItems : 0;
 
   return (
     <div className="flex w-full items-center gap-6 xl:gap-8">
       {/* Logo */}
       <div className="shrink-0">
-        <Logo />
+        <Logo siteName={siteName} logoUrl={logoUrl} />
       </div>
 
       {/* Navigation */}

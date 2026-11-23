@@ -1,38 +1,36 @@
-
 import { NextRequest, NextResponse } from "next/server";
+
+import { requireAdmin } from "@/lib/auth";
 import connectDB from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { normalizeDeliverySettings } from "@/lib/delivery";
 import StoreSettings from "@/models/StoreSettings";
+
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
 
 export async function GET() {
   try {
-    const user = await getCurrentUser();
+    const auth = await requireAdmin();
 
-    if (!user) {
+    if (!auth.authorized) {
       return NextResponse.json(
-        { success: false, message: "Authentication required" },
-        { status: 401 }
-      );
-    }
-
-    if (user.role !== "admin") {
-      return NextResponse.json(
-        { success: false, message: "Admin access required" },
-        { status: 403 }
+        { success: false, message: auth.message },
+        { status: auth.status }
       );
     }
 
     await connectDB();
 
-    let settings = await StoreSettings.findOne({ key: "store" });
-
-    if (!settings) {
-      settings = await StoreSettings.create({ key: "store" });
-    }
+    const settings = await StoreSettings.findOneAndUpdate(
+      { key: "store" },
+      { $setOnInsert: { key: "store" } },
+      { new: true, upsert: true }
+    ).lean();
 
     return NextResponse.json({
       success: true,
-      data: settings,
+      data: normalizeDeliverySettings(settings),
     });
   } catch (error) {
     console.error("Admin Delivery Settings GET Error:", error);
@@ -46,59 +44,115 @@ export async function GET() {
 
 export async function PUT(req: NextRequest) {
   try {
-    const user = await getCurrentUser();
+    const auth = await requireAdmin();
 
-    if (!user) {
+    if (!auth.authorized) {
       return NextResponse.json(
-        { success: false, message: "Authentication required" },
-        { status: 401 }
+        { success: false, message: auth.message },
+        { status: auth.status }
       );
     }
 
-    if (user.role !== "admin") {
+    let body: {
+      deliveryChargeEnabled?: unknown;
+      defaultDeliveryCharge?: unknown;
+      insideDhakaCharge?: unknown;
+      outsideDhakaCharge?: unknown;
+      freeDeliveryEnabled?: unknown;
+      freeDeliveryThreshold?: unknown;
+      minimumOrderAmount?: unknown;
+      estimatedDeliveryTime?: unknown;
+    };
+
+    try {
+      body = await req.json();
+    } catch {
       return NextResponse.json(
-        { success: false, message: "Admin access required" },
-        { status: 403 }
+        { success: false, message: "Invalid request body" },
+        { status: 400 }
       );
     }
 
-    const body = await req.json();
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        { success: false, message: "Invalid request body" },
+        { status: 400 }
+      );
+    }
 
     const {
+      deliveryChargeEnabled = true,
+      defaultDeliveryCharge,
       insideDhakaCharge,
       outsideDhakaCharge,
       freeDeliveryEnabled,
       freeDeliveryThreshold,
+      minimumOrderAmount = 0,
       estimatedDeliveryTime,
     } = body;
 
-    const charges = [insideDhakaCharge, outsideDhakaCharge];
+    if (typeof deliveryChargeEnabled !== "boolean") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Delivery charge enabled flag must be a boolean",
+        },
+        { status: 400 }
+      );
+    }
+
+    const resolvedDefaultCharge =
+      defaultDeliveryCharge !== undefined
+        ? defaultDeliveryCharge
+        : insideDhakaCharge;
 
     if (
-      charges.some(
-        (value) =>
-          typeof value !== "number" ||
-          !Number.isFinite(value) ||
-          value < 0
-      )
+      !isNonNegativeNumber(insideDhakaCharge) ||
+      !isNonNegativeNumber(outsideDhakaCharge) ||
+      !isNonNegativeNumber(resolvedDefaultCharge)
     ) {
       return NextResponse.json(
-        { success: false, message: "Delivery charges must be valid non-negative numbers" },
+        {
+          success: false,
+          message: "Delivery charges must be valid non-negative numbers",
+        },
         { status: 400 }
       );
     }
 
     if (
       typeof freeDeliveryEnabled !== "boolean" ||
-      typeof freeDeliveryThreshold !== "number" ||
-      !Number.isFinite(freeDeliveryThreshold) ||
-      freeDeliveryThreshold < 0 ||
-      typeof estimatedDeliveryTime !== "string" ||
-      !estimatedDeliveryTime.trim() ||
-      estimatedDeliveryTime.length > 100
+      !isNonNegativeNumber(freeDeliveryThreshold)
     ) {
       return NextResponse.json(
-        { success: false, message: "Invalid delivery settings" },
+        {
+          success: false,
+          message: "Free delivery threshold must be a valid non-negative number",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!isNonNegativeNumber(minimumOrderAmount)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Minimum order amount must be a valid non-negative number",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      typeof estimatedDeliveryTime !== "string" ||
+      !estimatedDeliveryTime.trim() ||
+      estimatedDeliveryTime.trim().length > 100
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Estimated delivery time must be between 1 and 100 characters",
+        },
         { status: 400 }
       );
     }
@@ -109,10 +163,13 @@ export async function PUT(req: NextRequest) {
       { key: "store" },
       {
         $set: {
+          deliveryChargeEnabled,
+          defaultDeliveryCharge: resolvedDefaultCharge,
           insideDhakaCharge,
           outsideDhakaCharge,
           freeDeliveryEnabled,
           freeDeliveryThreshold,
+          minimumOrderAmount,
           estimatedDeliveryTime: estimatedDeliveryTime.trim(),
         },
         $setOnInsert: { key: "store" },
@@ -122,12 +179,12 @@ export async function PUT(req: NextRequest) {
         upsert: true,
         runValidators: true,
       }
-    );
+    ).lean();
 
     return NextResponse.json({
       success: true,
       message: "Delivery settings saved successfully",
-      data: settings,
+      data: normalizeDeliverySettings(settings),
     });
   } catch (error) {
     console.error("Admin Delivery Settings PUT Error:", error);

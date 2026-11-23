@@ -28,13 +28,16 @@ export async function getCategories(): Promise<ICategory[]> {
     }
   );
 
-  const data = await res.json();
+  const data = (await res.json().catch(() => null)) as {
+    message?: string;
+    data?: ICategory[];
+  } | null;
 
   if (!res.ok) {
     throw new Error(
-      data.message || "Failed to fetch categories"
+      data?.message || "Failed to fetch categories"
     );
   }
 
-  return Array.isArray(data.data) ? data.data : [];
+  return Array.isArray(data?.data) ? data.data : [];
 }

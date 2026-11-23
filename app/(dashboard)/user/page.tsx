@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { useOrders } from "@/hooks/useOrders";
+import { formatBDT } from "@/lib/currency";
 
 import { Button } from "@/components/ui/button";
 
@@ -209,7 +210,7 @@ export default function UserDashboardPage() {
               variant="ghost"
               size="sm"
             >
-              <Link href="/dashboard/orders">
+              <Link href="/user/orders">
                 View All
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -294,7 +295,7 @@ export default function UserDashboardPage() {
 
                     {/* Amount */}
                     <p className="font-semibold">
-                      ${order.totalPrice.toFixed(2)}
+                      {formatBDT(order.totalPrice)}
                     </p>
 
                     {/* Details */}
@@ -304,7 +305,7 @@ export default function UserDashboardPage() {
                       size="sm"
                     >
                       <Link
-                        href={`/dashboard/orders/${order._id}`}
+                        href={`/user/orders/${order._id}`}
                       >
                         View
                       </Link>

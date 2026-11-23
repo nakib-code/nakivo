@@ -12,6 +12,8 @@ import { useRouter } from "next/navigation";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { getActiveFlashSalePricing } from "@/lib/flash-sale";
+import { useCartHydrated } from "@/store/useCartStore";
 
 import ProductCard from "./ProductCard";
 import { IProduct } from "@/types";
@@ -28,25 +30,78 @@ interface ProductListingProps {
   products: IProduct[];
   initialSearch: string;
   initialCategory: string;
+  initialSort?: string;
 }
 
-type SortOption = "default" | "price-low" | "price-high" | "name";
+type SortOption =
+  | "default"
+  | "newest"
+  | "deals"
+  | "price-low"
+  | "price-high"
+  | "name";
+
+function normalizeSort(value?: string): SortOption {
+  switch (value) {
+    case "newest":
+    case "deals":
+    case "price-low":
+    case "price-high":
+    case "name":
+      return value;
+    default:
+      return "default";
+  }
+}
 
 export default function ProductListing({
   products,
   initialSearch,
   initialCategory,
+  initialSort = "default",
 }: ProductListingProps) {
   const router = useRouter();
   const filterRef = useRef<HTMLDivElement>(null);
+  const hydrated = useCartHydrated();
+
+  const normalizedInitialCategory =
+    initialCategory && initialCategory !== "all" ? initialCategory : "all";
+  const normalizedInitialSort = normalizeSort(initialSort);
 
   const [search, setSearch] = useState(initialSearch);
 
   const [selectedCategory, setSelectedCategory] = useState(
-    initialCategory && initialCategory !== "all" ? initialCategory : "all",
+    normalizedInitialCategory,
   );
 
-  const [sort, setSort] = useState<SortOption>("default");
+  const [sort, setSort] = useState<SortOption>(normalizedInitialSort);
+
+  const [prevInitial, setPrevInitial] = useState({
+    search: initialSearch,
+    category: normalizedInitialCategory,
+    sort: normalizedInitialSort,
+  });
+
+  if (
+    prevInitial.search !== initialSearch ||
+    prevInitial.category !== normalizedInitialCategory ||
+    prevInitial.sort !== normalizedInitialSort
+  ) {
+    setPrevInitial({
+      search: initialSearch,
+      category: normalizedInitialCategory,
+      sort: normalizedInitialSort,
+    });
+    if (prevInitial.search !== initialSearch) {
+      setSearch(initialSearch);
+    }
+    if (prevInitial.category !== normalizedInitialCategory) {
+      setSelectedCategory(normalizedInitialCategory);
+    }
+    if (prevInitial.sort !== normalizedInitialSort) {
+      setSort(normalizedInitialSort);
+    }
+  }
 
   const [categories, setCategories] = useState<Category[]>([]);
 
@@ -106,7 +161,7 @@ export default function ProductListing({
   }, []);
 
   // =========================================
-  // UPDATE URL
+  // UPDATE URL (preserves sort & avoids clobbering external navigation)
   // =========================================
 
   useEffect(() => {
@@ -123,6 +178,10 @@ export default function ProductListing({
         params.set("category", selectedCategory);
       }
 
+      if (sort && sort !== "default") {
+        params.set("sort", sort);
+      }
+
       const query = params.toString();
 
       const nextUrl = query ? `/products?${query}` : "/products";
@@ -137,7 +196,7 @@ export default function ProductListing({
     return () => {
       clearTimeout(timeout);
     };
-  }, [search, selectedCategory, router]);
+  }, [search, selectedCategory, sort, router]);
 
   // =========================================
   // SORT
@@ -145,13 +204,21 @@ export default function ProductListing({
 
   const sortedProducts = useMemo(() => {
     const result = [...products];
+    const getEffectivePrice = (product: IProduct) =>
+      hydrated
+        ? getActiveFlashSalePricing(product).effectivePrice
+        : Number(product.price) || 0;
 
     switch (sort) {
       case "price-low":
-        return result.sort((a, b) => a.price - b.price);
+        return result.sort(
+          (a, b) => getEffectivePrice(a) - getEffectivePrice(b),
+        );
 
       case "price-high":
-        return result.sort((a, b) => b.price - a.price);
+        return result.sort(
+          (a, b) => getEffectivePrice(b) - getEffectivePrice(a),
+        );
 
       case "name":
         return result.sort((a, b) => a.title.localeCompare(b.title));
@@ -159,7 +226,7 @@ export default function ProductListing({
       default:
         return result;
     }
-  }, [products, sort]);
+  }, [products, sort, hydrated]);
 
   // =========================================
   // SELECTED CATEGORY NAME
@@ -369,6 +436,7 @@ export default function ProductListing({
 
                   <button
                     type="button"
+                    aria-label="Close filters"
                     onClick={() => setFilterOpen(false)}
                     className="
                       flex
@@ -519,6 +587,14 @@ export default function ProductListing({
                           label: "Featured",
                         },
                         {
+                          value: "newest",
+                          label: "Newest",
+                        },
+                        {
+                          value: "deals",
+                          label: "Flash Sale Deals",
+                        },
+                        {
                           value: "price-low",
                           label: "Price: Low to High",
                         },
@@ -630,7 +706,7 @@ export default function ProductListing({
             Shop
           </p>
 
-          <h2
+          <h1
             className="
               mt-1
               text-2xl
@@ -641,7 +717,7 @@ export default function ProductListing({
             "
           >
             {selectedCategoryName}
-          </h2>
+          </h1>
 
           {search.trim() && (
             <p className="mt-1 text-sm text-slate-500">
@@ -726,7 +802,7 @@ export default function ProductListing({
                 text-slate-500
               "
             >
-              We couldn't find products matching your current search or
+              We couldn&apos;t find products matching your current search or
               category.
             </p>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import {
   CalendarDays,
@@ -11,14 +12,7 @@ import {
 
 import { useOrders } from "@/hooks/useOrders";
 import { Button } from "@/components/ui/button";
-
-function formatBDT(amount: number) {
-  const safeAmount = Number.isFinite(amount) ? amount : 0;
-
-  return `৳${safeAmount.toLocaleString("en-BD", {
-    maximumFractionDigits: 2,
-  })}`;
-}
+import { formatBDT } from "@/lib/currency";
 
 function formatOrderDate(date: string | Date) {
   const parsedDate = new Date(date);
@@ -246,13 +240,14 @@ export default function UserOrdersPage() {
                       className="flex items-center gap-3 sm:gap-4"
                     >
                       {/* Product Image */}
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100">
+                      <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100">
                         {image ? (
-                          <img
+                          <Image
                             src={image}
                             alt={item.title || "Product"}
-                            loading="lazy"
-                            className="h-full w-full object-cover"
+                            fill
+                            sizes="64px"
+                            className="object-cover"
                           />
                         ) : (
                           <Package className="h-6 w-6 text-muted-foreground" />

@@ -117,6 +117,10 @@ const OrderSchema: Schema<IOrder> = new Schema(
   }
 );
 
+OrderSchema.index({ user: 1, createdAt: -1 });
+OrderSchema.index({ status: 1, createdAt: -1 });
+OrderSchema.index({ isPaid: 1, createdAt: -1 });
+
 const Order: Model<IOrder> =
   mongoose.models.Order ||
   mongoose.model<IOrder>("Order", OrderSchema);

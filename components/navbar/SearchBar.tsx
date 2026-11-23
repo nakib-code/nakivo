@@ -8,10 +8,12 @@ import { Input } from "@/components/ui/input";
 
 interface SearchBarProps {
   className?: string;
+  onSearch?: () => void;
 }
 
 export default function SearchBar({
   className,
+  onSearch,
 }: SearchBarProps) {
   const router = useRouter();
 
@@ -29,6 +31,7 @@ export default function SearchBar({
     router.push(
       `/products?search=${encodeURIComponent(keyword)}`
     );
+    onSearch?.();
   };
 
   return (

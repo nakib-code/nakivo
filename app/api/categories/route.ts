@@ -1,14 +1,22 @@
 
+import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth";
 import connectDB from "@/lib/db";
-import { uploadToCloudinary } from "@/lib/cloudinary";
+import { deleteFromCloudinary, uploadToCloudinary } from "@/lib/cloudinary";
 
 import {
   createCategory,
   getAllCategories,
 } from "@/service/category/category.service";
+
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+]);
 
 // ========================================
 // GET ALL CATEGORIES
@@ -30,15 +38,10 @@ export async function GET() {
   } catch (error) {
     console.error("GET Categories Error:", error);
 
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Failed to fetch categories";
-
     return NextResponse.json(
       {
         success: false,
-        message,
+        message: "Failed to fetch categories",
       },
       { status: 500 }
     );
@@ -77,7 +80,19 @@ export async function POST(req: NextRequest) {
     // FORM DATA
     // ========================================
 
-    const formData = await req.formData();
+    let formData: FormData;
+
+    try {
+      formData = await req.formData();
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid form data",
+        },
+        { status: 400 }
+      );
+    }
 
     const name = formData
       .get("name")
@@ -135,14 +150,15 @@ export async function POST(req: NextRequest) {
     const imageEntry = formData.get("image");
 
     let imageUrl = "";
+    let uploadedPublicId = "";
 
     if (imageEntry instanceof File && imageEntry.size > 0) {
-      // Validate image type
-      if (!imageEntry.type.startsWith("image/")) {
+      // Validate image type (raster allowlist, blocks SVG)
+      if (!ALLOWED_IMAGE_TYPES.has(imageEntry.type)) {
         return NextResponse.json(
           {
             success: false,
-            message: "Category image must be an image file",
+            message: "Category image must be a JPG, PNG, WebP, or AVIF file",
           },
           { status: 400 }
         );
@@ -170,17 +186,49 @@ export async function POST(req: NextRequest) {
       );
 
       imageUrl = uploadedImage.secure_url;
+      uploadedPublicId = uploadedImage.public_id;
     }
 
     // ========================================
     // CREATE CATEGORY
     // ========================================
 
-    const category = await createCategory({
-      name,
-      description,
-      image: imageUrl,
-    });
+    let category;
+
+    try {
+      category = await createCategory({
+        name,
+        slug,
+        description,
+        image: imageUrl,
+        imagePublicId: uploadedPublicId,
+      });
+    } catch (createError) {
+      if (uploadedPublicId) {
+        await deleteFromCloudinary(uploadedPublicId).catch((cleanupError) =>
+          console.error("Category Cloudinary cleanup error:", cleanupError)
+        );
+      }
+
+      if (
+        createError instanceof Error &&
+        createError.message.toLowerCase().includes("already exists")
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Category already exists",
+          },
+          { status: 409 }
+        );
+      }
+
+      throw createError;
+    }
+
+    revalidatePath("/");
+    revalidatePath("/products");
+    revalidatePath(`/category/${category.slug}`);
 
     // ========================================
     // RESPONSE
@@ -197,15 +245,10 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("POST Category Error:", error);
 
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Failed to create category";
-
     return NextResponse.json(
       {
         success: false,
-        message,
+        message: "Failed to create category",
       },
       { status: 500 }
     );

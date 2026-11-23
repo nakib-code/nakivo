@@ -4,7 +4,15 @@ import DesktopNav from "./DesktopNav";
 import MobileDrawer from "./MobileDrawer";
 import { useScrolled } from "@/hooks/useScrolled";
 
-export default function Navbar() {
+interface NavbarProps {
+  siteName?: string;
+  logoUrl?: string;
+}
+
+export default function Navbar({
+  siteName = "NAKIVO",
+  logoUrl = "",
+}: NavbarProps) {
   const scrolled = useScrolled();
 
   return (
@@ -40,12 +48,12 @@ export default function Navbar() {
       >
         {/* Desktop Navigation */}
         <div className="hidden h-full items-center lg:flex">
-          <DesktopNav />
+          <DesktopNav siteName={siteName} logoUrl={logoUrl} />
         </div>
 
         {/* Mobile Navigation */}
         <div className="flex h-full items-center lg:hidden">
-          <MobileDrawer />
+          <MobileDrawer siteName={siteName} logoUrl={logoUrl} />
         </div>
       </div>
     </header>

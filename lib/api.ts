@@ -11,11 +11,16 @@ export async function api<T>(
     cache: "no-store",
   });
 
-  const result = await response.json();
+  const result = (await response.json().catch(() => null)) as {
+    message?: string;
+    data?: T;
+  } | null;
 
   if (!response.ok) {
-    throw new Error(result.message);
+    throw new Error(
+      result?.message || `Request failed (${response.status})`
+    );
   }
 
-  return result.data as T;
+  return result?.data as T;
 }

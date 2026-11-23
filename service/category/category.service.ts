@@ -5,19 +5,24 @@ import {
   UpdateCategoryValues,
 } from "@/lib/validations/category";
 
-function createSlug(name: string) {
-  return name
+export function createCategorySlug(input: string): string {
+  const normalized = input
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalized || `category-${Date.now().toString(36)}`;
 }
 
 export async function createCategory(
-  data: CreateCategoryValues
+  data: CreateCategoryValues & { slug?: string; imagePublicId?: string }
 ) {
-  const slug = createSlug(data.name);
+  const slug = data.slug?.trim()
+    ? createCategorySlug(data.slug)
+    : createCategorySlug(data.name);
 
   const existingCategory = await Category.findOne({
     $or: [
@@ -35,6 +40,7 @@ export async function createCategory(
     slug,
     description: data.description?.trim() || "",
     image: data.image || "",
+    imagePublicId: data.imagePublicId || "",
   });
 
   return category;
@@ -65,7 +71,7 @@ export async function updateCategory(
   }
 
   if (data.name) {
-    const slug = createSlug(data.name);
+    const slug = createCategorySlug(data.name);
 
     const existingCategory = await Category.findOne({
       $or: [
