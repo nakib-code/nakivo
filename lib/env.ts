@@ -52,4 +52,12 @@ export const env = {
   CLOUDINARY_CLOUD_NAME: required("CLOUDINARY_CLOUD_NAME"),
   CLOUDINARY_API_KEY: required("CLOUDINARY_API_KEY"),
   CLOUDINARY_API_SECRET: required("CLOUDINARY_API_SECRET"),
+
+  // =========================
+  // Marketing & Analytics (Server-only / Optional)
+  // =========================
+  META_CAPI_ACCESS_TOKEN: optional("META_CAPI_ACCESS_TOKEN"),
+  META_CAPI_TEST_EVENT_CODE: optional("META_CAPI_TEST_EVENT_CODE"),
+  META_CAPI_API_VERSION: optional("META_CAPI_API_VERSION") || "v21.0",
+  GOOGLE_SITE_VERIFICATION: optional("GOOGLE_SITE_VERIFICATION"),
 };

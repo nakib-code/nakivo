@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BarChart3,
   ImageIcon,
   LayoutDashboard,
   Package,
@@ -46,7 +47,12 @@ const menuItems = [
     href: "/admin/hero",
     icon: ImageIcon,
   },
-    {
+  {
+    label: "Marketing & Analytics",
+    href: "/admin/marketing",
+    icon: BarChart3,
+  },
+  {
     label: "Settings",
     href: "/admin/settings",
     icon: Settings,

@@ -15,6 +15,7 @@ import Product from "@/models/Product";
 
 import ProductDetailsActions from "./ProductDetailsActions";
 import ProductImageGallery from "./ProductImageGallery";
+import { TrackViewItem } from "@/components/marketing/EcommerceTrackers";
 
 // ========================================
 // TYPES
@@ -159,6 +160,15 @@ const serializedProduct = {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <TrackViewItem
+        item={{
+          item_id: serializedProduct._id,
+          item_name: serializedProduct.title,
+          item_category: serializedProduct.category,
+          price: activePrice,
+          quantity: 1,
+        }}
+      />
       <div
         className="
           mx-auto

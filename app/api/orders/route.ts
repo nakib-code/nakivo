@@ -13,6 +13,15 @@ import {
   OrderServiceError,
   runWithTransactionOrFallback,
 } from "@/service/order/order.service";
+import {
+  CONSENT_COOKIE_NAME,
+  parseConsentCookieValue,
+} from "@/lib/marketing/consent";
+import { generatePurchaseEventId } from "@/lib/marketing/event-id";
+import {
+  extractRequestMetaContext,
+  sendMetaCapiEvent,
+} from "@/service/marketing/meta-capi.service";
 
 import Order from "@/models/Order";
 import Product from "@/models/Product";
@@ -357,11 +366,64 @@ export async function POST(req: NextRequest) {
       () => executeOrderCreation(undefined)
     );
 
+    if (!createdOrder) {
+      return errorResponse(
+        "Failed to create order. Please try again.",
+        500
+      );
+    }
+
+    const orderIdString = createdOrder._id.toString();
+    const trackingEventId = generatePurchaseEventId(orderIdString);
+
+    // Authoritative server-side Meta CAPI Purchase dispatch (never blocks or breaks order creation)
+    try {
+      const consentCookie = req.cookies.get(CONSENT_COOKIE_NAME)?.value;
+      const consent = parseConsentCookieValue(consentCookie);
+      const reqContext = extractRequestMetaContext(req);
+
+      await sendMetaCapiEvent(
+        {
+          eventName: "purchase",
+          eventId: trackingEventId,
+          eventSourceUrl: reqContext.eventSourceUrl,
+          currency: "BDT",
+          value: createdOrder.totalPrice,
+          orderId: orderIdString,
+          items: createdOrder.orderItems.map((item) => ({
+            item_id: String(item.product),
+            item_name: item.title,
+            price: item.price,
+            quantity: item.quantity,
+          })),
+          user: {
+            email: user.email || undefined,
+            phone,
+            city,
+            country: "bd",
+            externalId: user.id,
+            clientIpAddress: reqContext.clientIpAddress,
+            clientUserAgent: reqContext.clientUserAgent,
+            fbp: reqContext.fbp,
+            fbc: reqContext.fbc,
+          },
+        },
+        {
+          consentMarketing: Boolean(consent?.marketing),
+          consentAnalytics: Boolean(consent?.analytics),
+          path: "/checkout",
+        }
+      );
+    } catch (trackingError) {
+      console.error("Server Purchase Tracking Error:", trackingError);
+    }
+
     return NextResponse.json(
       {
         success: true,
         message: "Order created successfully.",
         data: createdOrder,
+        trackingEventId,
       },
       { status: 201 }
     );

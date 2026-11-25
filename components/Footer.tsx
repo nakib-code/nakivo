@@ -6,6 +6,7 @@ import {
   Phone,
   ArrowUpRight,
 } from "lucide-react";
+import { CookiePreferencesButton } from "@/components/marketing/CookieConsentBanner";
 
 const shopLinks = [
   { label: "All Products", href: "/products" },
@@ -169,6 +170,8 @@ export default function Footer({
                 className="transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
               />
             </Link>
+
+            <CookiePreferencesButton />
           </div>
         </div>
       </div>

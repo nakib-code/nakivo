@@ -17,6 +17,7 @@ import {
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { trackLogin } from "@/lib/marketing/tracker";
 
 import AuthHeader from "./AuthHeader";
 import AuthDivider from "./AuthDivider";
@@ -81,6 +82,8 @@ export default function LoginForm() {
           toast.error("Invalid email or password.");
           return;
         }
+
+        trackLogin("credentials");
 
         toast.success("Login successful!");
 

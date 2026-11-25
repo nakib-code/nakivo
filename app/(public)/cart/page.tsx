@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   ArrowLeft,
   Minus,
@@ -14,6 +14,11 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { formatBDT } from "@/lib/currency";
+import {
+  trackAddToCart,
+  trackRemoveFromCart,
+  trackViewCart,
+} from "@/lib/marketing/tracker";
 import { useCartHydrated, useCartStore } from "@/store/useCartStore";
 import type { IProduct } from "@/types";
 
@@ -30,6 +35,23 @@ export default function CartPage() {
 
   const mounted = useCartHydrated();
   const cartIdsKey = cart.map((item) => item._id).join(",");
+  const viewCartTrackedRef = useRef(false);
+
+  useEffect(() => {
+    if (!mounted || viewCartTrackedRef.current || cart.length === 0) {
+      return;
+    }
+    viewCartTrackedRef.current = true;
+    trackViewCart(
+      cart.map((item) => ({
+        item_id: item._id,
+        item_name: item.title,
+        price: item.price,
+        quantity: item.quantity,
+      })),
+      getTotalPrice()
+    );
+  }, [mounted, cart, getTotalPrice]);
 
   // Validate persisted cart prices and stock against the database
   useEffect(() => {
@@ -207,7 +229,15 @@ export default function CartPage() {
                           {/* Remove */}
                           <button
                             type="button"
-                            onClick={() => removeFromCart(item._id)}
+                            onClick={() => {
+                              trackRemoveFromCart({
+                                item_id: item._id,
+                                item_name: item.title,
+                                price: item.price,
+                                quantity: item.quantity,
+                              });
+                              removeFromCart(item._id);
+                            }}
                             className="shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600 sm:p-2"
                             aria-label={`Remove ${item.title}`}
                           >
@@ -221,12 +251,18 @@ export default function CartPage() {
                           <div className="flex items-center rounded-lg border">
                             <button
                               type="button"
-                              onClick={() =>
+                              onClick={() => {
+                                trackRemoveFromCart({
+                                  item_id: item._id,
+                                  item_name: item.title,
+                                  price: item.price,
+                                  quantity: 1,
+                                });
                                 updateQuantity(
                                   item._id,
                                   item.quantity - 1
-                                )
-                              }
+                                );
+                              }}
                               disabled={item.quantity <= 1}
                               className="flex h-8 w-8 items-center justify-center text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9"
                               aria-label="Decrease quantity"
@@ -240,12 +276,18 @@ export default function CartPage() {
 
                             <button
                               type="button"
-                              onClick={() =>
+                              onClick={() => {
+                                trackAddToCart({
+                                  item_id: item._id,
+                                  item_name: item.title,
+                                  price: item.price,
+                                  quantity: 1,
+                                });
                                 updateQuantity(
                                   item._id,
                                   item.quantity + 1
-                                )
-                              }
+                                );
+                              }}
                               disabled={item.quantity >= item.stock}
                               className="flex h-8 w-8 items-center justify-center text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9"
                               aria-label="Increase quantity"

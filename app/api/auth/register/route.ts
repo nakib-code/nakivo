@@ -3,6 +3,15 @@ import bcrypt from "bcryptjs";
 
 import User from "@/models/User";
 import connectDB from "@/lib/db";
+import {
+  CONSENT_COOKIE_NAME,
+  parseConsentCookieValue,
+} from "@/lib/marketing/consent";
+import { generateRegistrationEventId } from "@/lib/marketing/event-id";
+import {
+  extractRequestMetaContext,
+  sendMetaCapiEvent,
+} from "@/service/marketing/meta-capi.service";
 
 export const runtime = "nodejs";
 
@@ -95,15 +104,49 @@ export async function POST(request: NextRequest) {
       role: "customer",
     });
 
+    const userId = user._id.toString();
+    const trackingEventId = generateRegistrationEventId(userId);
+
+    try {
+      const consentCookie = request.cookies.get(CONSENT_COOKIE_NAME)?.value;
+      const consent = parseConsentCookieValue(consentCookie);
+      const reqContext = extractRequestMetaContext(request);
+
+      await sendMetaCapiEvent(
+        {
+          eventName: "sign_up",
+          eventId: trackingEventId,
+          eventSourceUrl: reqContext.eventSourceUrl,
+          user: {
+            email: user.email,
+            country: "bd",
+            externalId: userId,
+            clientIpAddress: reqContext.clientIpAddress,
+            clientUserAgent: reqContext.clientUserAgent,
+            fbp: reqContext.fbp,
+            fbc: reqContext.fbc,
+          },
+        },
+        {
+          consentMarketing: Boolean(consent?.marketing),
+          consentAnalytics: Boolean(consent?.analytics),
+          path: "/register",
+        }
+      );
+    } catch (trackingError) {
+      console.error("Server Sign-Up Tracking Error:", trackingError);
+    }
+
     return NextResponse.json(
       {
         success: true,
         message: "Account created successfully.",
         user: {
-          id: user._id.toString(),
+          id: userId,
           name: user.name,
           email: user.email,
         },
+        trackingEventId,
       },
       { status: 201 }
     );

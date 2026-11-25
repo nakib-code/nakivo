@@ -13,6 +13,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { formatBDT } from "@/lib/currency";
+import { trackAddToCart } from "@/lib/marketing/tracker";
 import { useCartStore } from "@/store/useCartStore";
 import { IProduct } from "@/types";
 
@@ -88,6 +89,16 @@ export default function ProductDetailsActions({
       return;
     }
 
+    if (product._id) {
+      trackAddToCart({
+        item_id: product._id,
+        item_name: product.title,
+        item_category: product.category,
+        price: unitPrice,
+        quantity: addedCount,
+      });
+    }
+
     if (addedCount < quantity) {
       toast.success(
         `Added ${addedCount} to cart (maximum available stock reached)`
@@ -128,6 +139,16 @@ export default function ProductDetailsActions({
     if (addedCount === 0 && lastReason !== "max_stock") {
       toast.error("Unable to add product to cart");
       return;
+    }
+
+    if (addedCount > 0 && product._id) {
+      trackAddToCart({
+        item_id: product._id,
+        item_name: product.title,
+        item_category: product.category,
+        price: unitPrice,
+        quantity: addedCount,
+      });
     }
 
     router.push("/checkout");

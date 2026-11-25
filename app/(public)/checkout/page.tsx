@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 
 import { formatBDT } from "@/lib/currency";
+import {
+  trackAddPaymentInfo,
+  trackBeginCheckout,
+  trackPurchase,
+} from "@/lib/marketing/tracker";
 import {
   calculateDeliveryDetails,
   DEFAULT_DELIVERY_SETTINGS,
@@ -41,6 +46,30 @@ export default function CheckoutPage() {
 
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState(false);
+  const beginCheckoutTrackedRef = useRef(false);
+
+  // Track begin_checkout once when authenticated checkout loads with items
+  useEffect(() => {
+    if (
+      !hydrated ||
+      sessionStatus !== "authenticated" ||
+      cart.length === 0 ||
+      beginCheckoutTrackedRef.current
+    ) {
+      return;
+    }
+
+    beginCheckoutTrackedRef.current = true;
+    trackBeginCheckout(
+      cart.map((item) => ({
+        item_id: item._id,
+        item_name: item.title,
+        price: item.price,
+        quantity: item.quantity,
+      })),
+      getTotalPrice()
+    );
+  }, [hydrated, sessionStatus, cart, getTotalPrice]);
 
   // Load delivery charges from Store Settings API.
   useEffect(() => {
@@ -210,6 +239,15 @@ export default function CheckoutPage() {
       return;
     }
 
+    const checkoutItemsSnapshot = cart.map((item) => ({
+      item_id: item._id,
+      item_name: item.title,
+      price: item.price,
+      quantity: item.quantity,
+    }));
+
+    trackAddPaymentInfo(checkoutItemsSnapshot, total, "COD");
+
     const payload: CreateOrderPayload = {
       items: cart.map((item) => ({
         product: item._id,
@@ -232,6 +270,31 @@ export default function CheckoutPage() {
           toast.error("Order created but order ID is missing");
           return;
         }
+
+        // Fire purchase conversion strictly after confirmed order creation
+        // with the exact server-generated event_id for Meta Pixel / CAPI deduplication
+        const confirmedItems =
+          Array.isArray(order.orderItems) && order.orderItems.length > 0
+            ? order.orderItems.map((item) => ({
+                item_id: String(item.product),
+                item_name: item.title,
+                price: item.price,
+                quantity: item.quantity,
+              }))
+            : checkoutItemsSnapshot;
+
+        trackPurchase({
+          orderId: order._id,
+          value:
+            typeof order.totalPrice === "number" ? order.totalPrice : total,
+          shipping:
+            typeof order.deliveryCharge === "number"
+              ? order.deliveryCharge
+              : deliveryCharge,
+          paymentType: "COD",
+          items: confirmedItems,
+          eventId: result.trackingEventId,
+        });
 
         toast.success("Order placed successfully!");
         clearCart();

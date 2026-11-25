@@ -5,7 +5,9 @@ import "./globals.css";
 
 import QueryProvider from "@/providers/QueryProvider";
 import AuthProvider from "@/providers/AuthProvider";
+import MarketingProvider from "@/providers/MarketingProvider";
 import { getWebsiteSettings } from "@/service/settings/website-settings.service";
+import { getPublicMarketingConfig } from "@/service/marketing/marketing-settings.service";
 
 import { Toaster } from "sonner";
 
@@ -20,7 +22,16 @@ const geistMono = Geist_Mono({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { siteName, faviconUrl } = await getWebsiteSettings();
+  const [{ siteName, faviconUrl }, marketingConfig] = await Promise.all([
+    getWebsiteSettings(),
+    getPublicMarketingConfig(),
+  ]);
+
+  const googleVerification =
+    marketingConfig.searchConsole.enabled &&
+    marketingConfig.searchConsole.verificationCode
+      ? marketingConfig.searchConsole.verificationCode
+      : undefined;
 
   return {
     metadataBase: new URL(
@@ -31,6 +42,13 @@ export async function generateMetadata(): Promise<Metadata> {
       template: `%s | ${siteName}`,
     },
     description: `Shop curated fashion, electronics, and everyday essentials at ${siteName} with fast Cash on Delivery across Bangladesh.`,
+    ...(googleVerification
+      ? {
+          verification: {
+            google: googleVerification,
+          },
+        }
+      : {}),
     ...(faviconUrl
       ? {
           icons: {
@@ -47,11 +65,13 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const marketingConfig = await getPublicMarketingConfig();
+
   return (
     <html lang="en">
       <body
@@ -59,8 +79,10 @@ export default function RootLayout({
       >
         <AuthProvider>
           <QueryProvider>
-            {children}
-            <Toaster richColors position="top-right" />
+            <MarketingProvider initialConfig={marketingConfig}>
+              {children}
+              <Toaster richColors position="top-right" />
+            </MarketingProvider>
           </QueryProvider>
         </AuthProvider>
       </body>

@@ -9,6 +9,7 @@ import {
 import {
   getOrders,
   createOrder,
+  type CreateOrderApiResponse,
 } from "@/service/order/order.api";
 
 import type {
@@ -21,15 +22,7 @@ import type {
 // CREATE ORDER RESPONSE
 // ==================================================
 
-interface CreateOrderResponse {
-  success: boolean;
-
-  message: string;
-
-  data: {
-    _id: string;
-  };
-}
+type CreateOrderResponse = CreateOrderApiResponse;
 
 // ==================================================
 // UPDATE ORDER STATUS PAYLOAD

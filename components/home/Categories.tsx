@@ -18,7 +18,7 @@ export default async function Categories() {
   return (
     <section
       aria-label="Categories"
-      className="site-section w-full overflow-x-clip bg-background"
+      className=" w-full overflow-x-clip bg-background"
     >
       <div className="site-container">
         <CategoryCarouselTrack>

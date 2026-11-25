@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { getActiveFlashSalePricing } from "@/lib/flash-sale";
+import { trackSearch, trackViewItemList } from "@/lib/marketing/tracker";
 import { useCartHydrated } from "@/store/useCartStore";
 
 import ProductCard from "./ProductCard";
@@ -237,6 +238,42 @@ export default function ProductListing({
       ? "All Products"
       : categories.find((category) => category.name === selectedCategory)
           ?.name || selectedCategory;
+
+  const lastTrackedListRef = useRef<string>("");
+  const lastTrackedSearchRef = useRef<string>("");
+
+  useEffect(() => {
+    if (!hydrated || sortedProducts.length === 0) return;
+
+    const listKey = `${selectedCategoryName}:${sortedProducts
+      .slice(0, 12)
+      .map((p) => p._id)
+      .join(",")}`;
+
+    if (lastTrackedListRef.current === listKey) return;
+    lastTrackedListRef.current = listKey;
+
+    trackViewItemList(
+      selectedCategoryName,
+      sortedProducts.slice(0, 24).map((product, index) => ({
+        item_id: String(product._id || ""),
+        item_name: product.title,
+        item_category: product.category,
+        price: getActiveFlashSalePricing(product).effectivePrice,
+        quantity: 1,
+        index,
+      }))
+    );
+  }, [hydrated, selectedCategoryName, sortedProducts]);
+
+  useEffect(() => {
+    const trimmed = initialSearch.trim();
+    if (!hydrated || !trimmed || lastTrackedSearchRef.current === trimmed) {
+      return;
+    }
+    lastTrackedSearchRef.current = trimmed;
+    trackSearch(trimmed);
+  }, [hydrated, initialSearch]);
 
   // =========================================
   // FILTER COUNT

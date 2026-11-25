@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 import { useCartStore } from "@/store/useCartStore";
 import { formatBDT } from "@/lib/currency";
+import { trackAddToCart } from "@/lib/marketing/tracker";
 import type { IProduct } from "@/types";
 
 interface FlashSaleCardProps {
@@ -110,6 +111,14 @@ export default function FlashSaleCard({
       );
       return;
     }
+
+    trackAddToCart({
+      item_id: productId,
+      item_name: product.title,
+      item_category: product.category,
+      price: currentPrice,
+      quantity: 1,
+    });
 
     toast.success(`${product.title} added to cart`);
   };

@@ -8,6 +8,7 @@ import { Eye, EyeOff, Loader2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { trackSignUp } from "@/lib/marketing/tracker";
 
 export default function RegisterForm() {
   const router = useRouter();
@@ -67,12 +68,15 @@ export default function RegisterForm() {
       const data = (await response.json().catch(() => null)) as {
         success?: boolean;
         message?: string;
+        trackingEventId?: string;
       } | null;
 
       if (!response.ok || !data?.success) {
         setError(data?.message || "Registration failed.");
         return;
       }
+
+      trackSignUp("email", data.trackingEventId);
 
       setSuccess("Account created successfully! Redirecting to login...");
 

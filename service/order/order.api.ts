@@ -6,8 +6,18 @@ import type {
 export interface CreateOrderApiResponse {
   success: boolean;
   message: string;
+  trackingEventId?: string;
   data: {
     _id: string;
+    totalPrice?: number;
+    subtotal?: number;
+    deliveryCharge?: number;
+    orderItems?: Array<{
+      product: string;
+      title: string;
+      price: number;
+      quantity: number;
+    }>;
   };
 }
 

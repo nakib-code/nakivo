@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 import { formatBDT } from "@/lib/currency";
 import { getActiveFlashSalePricing } from "@/lib/flash-sale";
+import { trackAddToCart } from "@/lib/marketing/tracker";
 import { useCartHydrated, useCartStore } from "@/store/useCartStore";
 import { IProduct } from "@/types";
 
@@ -60,6 +61,16 @@ export default function ProductCard({
       return;
     }
 
+    if (product._id) {
+      trackAddToCart({
+        item_id: product._id,
+        item_name: product.title,
+        item_category: product.category,
+        price: pricing.effectivePrice,
+        quantity: 1,
+      });
+    }
+
     toast.success(
       `${product.title} added to cart`
     );
@@ -76,6 +87,16 @@ export default function ProductCard({
     if (!result.added && result.reason !== "max_stock") {
       toast.error("Unable to add product to cart");
       return;
+    }
+
+    if (result.added && product._id) {
+      trackAddToCart({
+        item_id: product._id,
+        item_name: product.title,
+        item_category: product.category,
+        price: pricing.effectivePrice,
+        quantity: 1,
+      });
     }
 
     router.push("/checkout");

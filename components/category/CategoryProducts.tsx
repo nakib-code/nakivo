@@ -1,4 +1,6 @@
 import ProductCard from "@/components/products/ProductCard";
+import { TrackViewItemList } from "@/components/marketing/EcommerceTrackers";
+import { getActiveFlashSalePricing } from "@/lib/flash-sale";
 import { IProduct } from "@/types";
 
 interface Category {
@@ -22,6 +24,17 @@ export default function CategoryProducts({
     <section
     className="mt-5"
     >
+      <TrackViewItemList
+        listName={category.name}
+        items={products.slice(0, 24).map((product, index) => ({
+          item_id: String(product._id || ""),
+          item_name: product.title,
+          item_category: product.category || category.name,
+          price: getActiveFlashSalePricing(product).effectivePrice,
+          quantity: 1,
+          index,
+        }))}
+      />
       {/* ================================
           CATEGORY HEADER
       ================================= */}

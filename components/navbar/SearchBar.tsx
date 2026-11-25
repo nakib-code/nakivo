@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { trackSearch } from "@/lib/marketing/tracker";
 
 interface SearchBarProps {
   className?: string;
@@ -27,6 +28,8 @@ export default function SearchBar({
     const keyword = search.trim();
 
     if (!keyword) return;
+
+    trackSearch(keyword);
 
     router.push(
       `/products?search=${encodeURIComponent(keyword)}`
