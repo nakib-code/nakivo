@@ -12,16 +12,7 @@ export default function Hero({ banners }: Props) {
   }
 
   return (
-    <section
-      className="
-        relative
-        h-[300px]
-        w-full
-        overflow-hidden
-        sm:h-[400px]
-        md:h-[600px]
-      "
-    >
+    <section className="relative w-full overflow-hidden">
       <HeroCarousel banners={banners} />
     </section>
   );

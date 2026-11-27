@@ -240,7 +240,7 @@ export default function ProductCard({
       {/* ================= PRODUCT INFO ================= */}
       <div
         className="
-          space-y-2.5 p-3
+          space-y-2 p-2.5
           sm:space-y-4 sm:p-5
         "
       >
@@ -263,8 +263,8 @@ export default function ProductCard({
           <h3
             className="
               line-clamp-2
-              min-h-[36px]
-              text-sm font-bold leading-5
+              min-h-[32px]
+              text-xs font-bold leading-4
               text-slate-900
               transition-colors duration-300
               group-hover:text-slate-600
@@ -294,7 +294,7 @@ export default function ProductCard({
         {/* Price */}
         <div className="flex flex-wrap items-end gap-1.5 sm:gap-2.5">
           <span
-            className={`text-lg font-black tracking-tight sm:text-2xl ${
+            className={`text-base font-black tracking-tight sm:text-2xl ${
               pricing.isActive ? "text-red-600" : "text-slate-950"
             }`}
           >
