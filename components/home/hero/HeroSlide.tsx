@@ -5,20 +5,37 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 
-import { HeroBanner } from "@/types/hero.types";
+import {
+  DEFAULT_PRIMARY_BUTTON_LINK,
+  DEFAULT_PRIMARY_BUTTON_TEXT,
+  DEFAULT_SECONDARY_BUTTON_LINK,
+  DEFAULT_SECONDARY_BUTTON_TEXT,
+} from "@/lib/hero";
+import type { HeroBanner } from "@/types/hero.types";
 
 interface Props {
   banner: HeroBanner;
   priority?: boolean;
+  hasMultiple?: boolean;
 }
 
-export default function HeroSlide({ banner, priority = false }: Props) {
-  const primaryHref = banner.buttonLink?.trim() || "/products";
-  const primaryLabel = banner.buttonText?.trim() || "Shop Now";
+export default function HeroSlide({
+  banner,
+  priority = false,
+  hasMultiple = false,
+}: Props) {
+  const primaryHref =
+    banner.primaryButtonLink?.trim() || DEFAULT_PRIMARY_BUTTON_LINK;
+  const primaryLabel =
+    banner.primaryButtonText?.trim() || DEFAULT_PRIMARY_BUTTON_TEXT;
+  const secondaryHref =
+    banner.secondaryButtonLink?.trim() || DEFAULT_SECONDARY_BUTTON_LINK;
+  const secondaryLabel =
+    banner.secondaryButtonText?.trim() || DEFAULT_SECONDARY_BUTTON_TEXT;
 
   return (
     <section
-      aria-label={banner.title || "Hero banner"}
+      aria-label="Hero banner"
       className="
         relative
         aspect-[16/9]
@@ -33,7 +50,7 @@ export default function HeroSlide({ banner, priority = false }: Props) {
       {banner.image ? (
         <Image
           src={banner.image}
-          alt={banner.title || "Promotional banner"}
+          alt="Promotional hero banner"
           fill
           priority={priority}
           sizes="100vw"
@@ -59,9 +76,9 @@ export default function HeroSlide({ banner, priority = false }: Props) {
         "
       />
 
-      {/* ================= ACTION BUTTONS ONLY ================= */}
+      {/* ================= TWO ACTION BUTTONS AT THE BOTTOM ================= */}
       <div
-        className="
+        className={`
           relative
           z-10
           mx-auto
@@ -69,31 +86,35 @@ export default function HeroSlide({ banner, priority = false }: Props) {
           h-full
           max-w-7xl
           items-end
+          justify-center
           px-4
-          pb-7
           sm:px-6
-          sm:pb-10
           lg:px-8
-          md:pb-12
-        "
+          ${
+            hasMultiple
+              ? "pb-9 sm:pb-12 md:pb-14"
+              : "pb-5 sm:pb-8 md:pb-10"
+          }
+        `}
       >
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45 }}
-          className="flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4"
+          className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3.5 md:gap-4"
         >
-          {/* Primary Banner CTA */}
+          {/* Button 1 (Primary) */}
           <Link
             href={primaryHref}
             className="
               inline-flex
               items-center
+              justify-center
               rounded-lg
               bg-primary
-              px-3.5
+              px-4
               py-2
-              text-[11px]
+              text-xs
               font-semibold
               text-white
               shadow-md
@@ -113,7 +134,7 @@ export default function HeroSlide({ banner, priority = false }: Props) {
 
             <ArrowRight
               className="
-                ml-1
+                ml-1.5
                 h-3.5
                 w-3.5
                 sm:ml-2
@@ -125,19 +146,20 @@ export default function HeroSlide({ banner, priority = false }: Props) {
             />
           </Link>
 
-          {/* Secondary Explore More CTA */}
+          {/* Button 2 (Secondary) */}
           <Link
-            href="/products"
+            href={secondaryHref}
             className="
               inline-flex
               items-center
+              justify-center
               rounded-lg
               border
-              border-white/50
-              bg-black/35
-              px-3.5
+              border-white/55
+              bg-black/40
+              px-4
               py-2
-              text-[11px]
+              text-xs
               font-semibold
               text-white
               backdrop-blur-sm
@@ -153,7 +175,7 @@ export default function HeroSlide({ banner, priority = false }: Props) {
               md:text-base
             "
           >
-            Explore More
+            {secondaryLabel}
           </Link>
         </motion.div>
       </div>

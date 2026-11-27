@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node --import ./__tests__/register.mjs --test __tests__/marketing.test.ts __tests__/combo.test.ts __tests__/order-and-roles.test.ts",
-    "seed:admin": "node --import ./__tests__/register.mjs scripts/seed-admin.ts"
+    "test": "node --import ./__tests__/register.mjs --test __tests__/hero.test.ts __tests__/marketing.test.ts __tests__/combo.test.ts __tests__/order-and-roles.test.ts",
+    "seed:admin": "node --import ./__tests__/register.mjs scripts/seed-admin.ts",
+    "migrate:hero": "node --import ./__tests__/register.mjs scripts/migrate-hero-banners.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",

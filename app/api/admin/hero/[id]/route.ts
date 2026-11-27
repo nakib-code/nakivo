@@ -5,45 +5,35 @@ import mongoose from "mongoose";
 import { requireStaff } from "@/lib/auth";
 import { deleteFromCloudinary, uploadToCloudinary } from "@/lib/cloudinary";
 import connectDB from "@/lib/db";
+import {
+  ALLOWED_HERO_IMAGE_MIME_TYPES,
+  DEFAULT_PRIMARY_BUTTON_LINK,
+  DEFAULT_PRIMARY_BUTTON_TEXT,
+  DEFAULT_SECONDARY_BUTTON_LINK,
+  DEFAULT_SECONDARY_BUTTON_TEXT,
+  isSafeButtonLink,
+  MAX_HERO_IMAGE_SIZE,
+  normalizeHeroBanner,
+  parseHeroOrder,
+  type RawHeroBannerRecord,
+} from "@/lib/hero";
 import HeroBanner from "@/models/HeroBanner";
-
-const MAX_HERO_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
-const ALLOWED_IMAGE_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "image/avif",
-]);
-
-function isSafeButtonLink(link: string): boolean {
-  const trimmed = link.trim();
-
-  if (!trimmed) {
-    return true;
-  }
-
-  if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
-    return false;
-  }
-
-  if (trimmed.startsWith("/")) {
-    return !trimmed.startsWith("//");
-  }
-
-  try {
-    const parsed = new URL(trimmed);
-    return parsed.protocol === "https:" || parsed.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
 
 interface RouteParams {
   params: Promise<{
     id: string;
   }>;
 }
+
+const LEGACY_FIELDS_UNSET = {
+  title: "",
+  description: "",
+  subtitle: "",
+  badge: "",
+  tag: "",
+  buttonText: "",
+  buttonLink: "",
+};
 
 // ==================================================
 // UPDATE HERO BANNER (JSON toggle/order OR FormData edit + image replace)
@@ -73,7 +63,9 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
     await connectDB();
 
-    const existing = await HeroBanner.findById(id).lean();
+    const existing = (await HeroBanner.findById(id).lean()) as
+      | (RawHeroBannerRecord & { imagePublicId?: string })
+      | null;
 
     if (!existing) {
       return NextResponse.json(
@@ -98,55 +90,75 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         );
       }
 
-      const rawTitle = formData.get("title");
-      const rawDescription = formData.get("description");
-      const rawButtonText = formData.get("buttonText");
-      const rawButtonLink = formData.get("buttonLink");
+      const rawPrimaryButtonText = formData.get("primaryButtonText");
+      const rawPrimaryButtonLink = formData.get("primaryButtonLink");
+      const rawSecondaryButtonText = formData.get("secondaryButtonText");
+      const rawSecondaryButtonLink = formData.get("secondaryButtonLink");
       const rawOrder = formData.get("order");
       const rawActive = formData.get("active");
       const rawImage = formData.get("image");
 
-      if (rawTitle !== null) {
-        const title = typeof rawTitle === "string" ? rawTitle.trim() : "";
-        if (!title) {
-          return NextResponse.json(
-            { success: false, message: "Title is required" },
-            { status: 400 }
-          );
-        }
-        updateFields.title = title;
+      if (rawPrimaryButtonText !== null) {
+        const text =
+          typeof rawPrimaryButtonText === "string"
+            ? rawPrimaryButtonText.trim()
+            : "";
+        updateFields.primaryButtonText = text || DEFAULT_PRIMARY_BUTTON_TEXT;
       }
 
-      if (rawDescription !== null) {
-        updateFields.description =
-          typeof rawDescription === "string" ? rawDescription.trim() : "";
-      }
-
-      if (rawButtonText !== null) {
-        const buttonText =
-          typeof rawButtonText === "string" ? rawButtonText.trim() : "";
-        updateFields.buttonText = buttonText || "Shop Now";
-      }
-
-      if (rawButtonLink !== null) {
-        const buttonLink =
-          typeof rawButtonLink === "string" ? rawButtonLink.trim() : "";
-        if (!isSafeButtonLink(buttonLink)) {
+      if (rawPrimaryButtonLink !== null) {
+        const link =
+          typeof rawPrimaryButtonLink === "string"
+            ? rawPrimaryButtonLink.trim()
+            : "";
+        if (!isSafeButtonLink(link)) {
           return NextResponse.json(
             {
               success: false,
               message:
-                "Invalid button link. Only relative paths or http/https URLs are allowed",
+                "Invalid Button 1 link. Only relative paths or http/https URLs are allowed",
             },
             { status: 400 }
           );
         }
-        updateFields.buttonLink = buttonLink || "/products";
+        updateFields.primaryButtonLink = link || DEFAULT_PRIMARY_BUTTON_LINK;
       }
 
-      if (rawOrder !== null && typeof rawOrder === "string" && rawOrder.trim() !== "") {
-        const parsedOrder = Number(rawOrder);
-        if (!Number.isInteger(parsedOrder) || parsedOrder < 0) {
+      if (rawSecondaryButtonText !== null) {
+        const text =
+          typeof rawSecondaryButtonText === "string"
+            ? rawSecondaryButtonText.trim()
+            : "";
+        updateFields.secondaryButtonText =
+          text || DEFAULT_SECONDARY_BUTTON_TEXT;
+      }
+
+      if (rawSecondaryButtonLink !== null) {
+        const link =
+          typeof rawSecondaryButtonLink === "string"
+            ? rawSecondaryButtonLink.trim()
+            : "";
+        if (!isSafeButtonLink(link)) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "Invalid Button 2 link. Only relative paths or http/https URLs are allowed",
+            },
+            { status: 400 }
+          );
+        }
+        updateFields.secondaryButtonLink =
+          link || DEFAULT_SECONDARY_BUTTON_LINK;
+      }
+
+      if (
+        rawOrder !== null &&
+        typeof rawOrder === "string" &&
+        rawOrder.trim() !== ""
+      ) {
+        const parsedOrder = parseHeroOrder(rawOrder);
+        if (parsedOrder === null) {
           return NextResponse.json(
             {
               success: false,
@@ -170,7 +182,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
           );
         }
 
-        if (!ALLOWED_IMAGE_MIME_TYPES.has(rawImage.type)) {
+        if (!ALLOWED_HERO_IMAGE_MIME_TYPES.has(rawImage.type)) {
           return NextResponse.json(
             {
               success: false,
@@ -192,10 +204,10 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       }
     } else {
       let body: {
-        title?: unknown;
-        description?: unknown;
-        buttonText?: unknown;
-        buttonLink?: unknown;
+        primaryButtonText?: unknown;
+        primaryButtonLink?: unknown;
+        secondaryButtonText?: unknown;
+        secondaryButtonLink?: unknown;
         active?: unknown;
         order?: unknown;
       };
@@ -216,51 +228,62 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         );
       }
 
-      if (body.title !== undefined) {
-        if (typeof body.title !== "string" || !body.title.trim()) {
+      if (body.primaryButtonText !== undefined) {
+        if (typeof body.primaryButtonText !== "string") {
           return NextResponse.json(
-            { success: false, message: "Title must be a non-empty string" },
+            { success: false, message: "Button 1 label must be a string" },
             { status: 400 }
           );
         }
-        updateFields.title = body.title.trim();
+        updateFields.primaryButtonText =
+          body.primaryButtonText.trim() || DEFAULT_PRIMARY_BUTTON_TEXT;
       }
 
-      if (body.description !== undefined) {
-        if (typeof body.description !== "string") {
-          return NextResponse.json(
-            { success: false, message: "Description must be a string" },
-            { status: 400 }
-          );
-        }
-        updateFields.description = body.description.trim();
-      }
-
-      if (body.buttonText !== undefined) {
-        if (typeof body.buttonText !== "string") {
-          return NextResponse.json(
-            { success: false, message: "Button text must be a string" },
-            { status: 400 }
-          );
-        }
-        updateFields.buttonText = body.buttonText.trim() || "Shop Now";
-      }
-
-      if (body.buttonLink !== undefined) {
+      if (body.primaryButtonLink !== undefined) {
         if (
-          typeof body.buttonLink !== "string" ||
-          !isSafeButtonLink(body.buttonLink)
+          typeof body.primaryButtonLink !== "string" ||
+          !isSafeButtonLink(body.primaryButtonLink)
         ) {
           return NextResponse.json(
             {
               success: false,
               message:
-                "Invalid button link. Only relative paths or http/https URLs are allowed",
+                "Invalid Button 1 link. Only relative paths or http/https URLs are allowed",
             },
             { status: 400 }
           );
         }
-        updateFields.buttonLink = body.buttonLink.trim() || "/products";
+        updateFields.primaryButtonLink =
+          body.primaryButtonLink.trim() || DEFAULT_PRIMARY_BUTTON_LINK;
+      }
+
+      if (body.secondaryButtonText !== undefined) {
+        if (typeof body.secondaryButtonText !== "string") {
+          return NextResponse.json(
+            { success: false, message: "Button 2 label must be a string" },
+            { status: 400 }
+          );
+        }
+        updateFields.secondaryButtonText =
+          body.secondaryButtonText.trim() || DEFAULT_SECONDARY_BUTTON_TEXT;
+      }
+
+      if (body.secondaryButtonLink !== undefined) {
+        if (
+          typeof body.secondaryButtonLink !== "string" ||
+          !isSafeButtonLink(body.secondaryButtonLink)
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "Invalid Button 2 link. Only relative paths or http/https URLs are allowed",
+            },
+            { status: 400 }
+          );
+        }
+        updateFields.secondaryButtonLink =
+          body.secondaryButtonLink.trim() || DEFAULT_SECONDARY_BUTTON_LINK;
       }
 
       if (body.active !== undefined) {
@@ -274,8 +297,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       }
 
       if (body.order !== undefined) {
-        const parsedOrder = Number(body.order);
-        if (!Number.isInteger(parsedOrder) || parsedOrder < 0) {
+        const parsedOrder = parseHeroOrder(body.order);
+        if (parsedOrder === null) {
           return NextResponse.json(
             {
               success: false,
@@ -295,11 +318,29 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Preserve button values from pre-migration documents before unsetting legacy fields
+    const normalizedExisting = normalizeHeroBanner(existing);
+    if (updateFields.primaryButtonText === undefined && !existing.primaryButtonText) {
+      updateFields.primaryButtonText = normalizedExisting.primaryButtonText;
+    }
+    if (updateFields.primaryButtonLink === undefined && !existing.primaryButtonLink) {
+      updateFields.primaryButtonLink = normalizedExisting.primaryButtonLink;
+    }
+    if (updateFields.secondaryButtonText === undefined && !existing.secondaryButtonText) {
+      updateFields.secondaryButtonText = normalizedExisting.secondaryButtonText;
+    }
+    if (updateFields.secondaryButtonLink === undefined && !existing.secondaryButtonLink) {
+      updateFields.secondaryButtonLink = normalizedExisting.secondaryButtonLink;
+    }
+
     const updated = await HeroBanner.findByIdAndUpdate(
       id,
-      { $set: updateFields },
+      {
+        $set: updateFields,
+        $unset: LEGACY_FIELDS_UNSET,
+      },
       { new: true, runValidators: true }
-    );
+    ).lean();
 
     // Delete replaced Cloudinary asset only after DB update succeeds
     if (oldPublicIdToDelete) {
@@ -314,7 +355,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       {
         success: true,
         message: "Banner updated successfully",
-        data: updated,
+        data: updated ? normalizeHeroBanner(updated) : null,
       },
       { status: 200 }
     );

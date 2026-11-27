@@ -19,7 +19,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -27,26 +27,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-
-interface HeroBanner {
-  _id: string;
-  title: string;
-  description: string;
-  image: string;
-  buttonText: string;
-  buttonLink: string;
-  active: boolean;
-  order?: number;
-}
-
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const ALLOWED_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "image/avif",
-]);
+import {
+  ALLOWED_HERO_IMAGE_MIME_TYPES,
+  DEFAULT_PRIMARY_BUTTON_LINK,
+  DEFAULT_PRIMARY_BUTTON_TEXT,
+  DEFAULT_SECONDARY_BUTTON_LINK,
+  DEFAULT_SECONDARY_BUTTON_TEXT,
+  isSafeButtonLink,
+  MAX_HERO_IMAGE_SIZE,
+} from "@/lib/hero";
+import type { HeroBanner } from "@/types/hero.types";
 
 function sortBanners(list: HeroBanner[]): HeroBanner[] {
   return [...list].sort(
@@ -64,10 +54,10 @@ export default function HeroListPage() {
 
   // Edit Dialog State
   const [editingHero, setEditingHero] = useState<HeroBanner | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editButtonText, setEditButtonText] = useState("");
-  const [editButtonLink, setEditButtonLink] = useState("");
+  const [editPrimaryButtonText, setEditPrimaryButtonText] = useState("");
+  const [editPrimaryButtonLink, setEditPrimaryButtonLink] = useState("");
+  const [editSecondaryButtonText, setEditSecondaryButtonText] = useState("");
+  const [editSecondaryButtonLink, setEditSecondaryButtonLink] = useState("");
   const [editOrder, setEditOrder] = useState("0");
   const [editActive, setEditActive] = useState(true);
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
@@ -134,10 +124,18 @@ export default function HeroListPage() {
 
   const openEditDialog = (hero: HeroBanner) => {
     setEditingHero(hero);
-    setEditTitle(hero.title || "");
-    setEditDescription(hero.description || "");
-    setEditButtonText(hero.buttonText || "Shop Now");
-    setEditButtonLink(hero.buttonLink || "/products");
+    setEditPrimaryButtonText(
+      hero.primaryButtonText || DEFAULT_PRIMARY_BUTTON_TEXT
+    );
+    setEditPrimaryButtonLink(
+      hero.primaryButtonLink || DEFAULT_PRIMARY_BUTTON_LINK
+    );
+    setEditSecondaryButtonText(
+      hero.secondaryButtonText || DEFAULT_SECONDARY_BUTTON_TEXT
+    );
+    setEditSecondaryButtonLink(
+      hero.secondaryButtonLink || DEFAULT_SECONDARY_BUTTON_LINK
+    );
     setEditOrder(String(hero.order ?? 0));
     setEditActive(Boolean(hero.active));
     setEditImageFile(null);
@@ -155,14 +153,14 @@ export default function HeroListPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!ALLOWED_MIME_TYPES.has(file.type)) {
+    if (!ALLOWED_HERO_IMAGE_MIME_TYPES.has(file.type)) {
       toast.error(
         "Unsupported image type. Allowed: JPEG, PNG, WebP, GIF, AVIF"
       );
       return;
     }
 
-    if (file.size > MAX_FILE_SIZE) {
+    if (file.size > MAX_HERO_IMAGE_SIZE) {
       toast.error("Image size must not exceed 5MB");
       return;
     }
@@ -179,9 +177,19 @@ export default function HeroListPage() {
     e.preventDefault();
     if (!editingHero) return;
 
-    const trimmedTitle = editTitle.trim();
-    if (!trimmedTitle) {
-      toast.error("Banner title is required");
+    const primaryLink = editPrimaryButtonLink.trim();
+    if (!isSafeButtonLink(primaryLink)) {
+      toast.error(
+        "Invalid Button 1 link. Use a relative path (/...) or http/https URL"
+      );
+      return;
+    }
+
+    const secondaryLink = editSecondaryButtonLink.trim();
+    if (!isSafeButtonLink(secondaryLink)) {
+      toast.error(
+        "Invalid Button 2 link. Use a relative path (/...) or http/https URL"
+      );
       return;
     }
 
@@ -195,10 +203,22 @@ export default function HeroListPage() {
       setSavingEdit(true);
 
       const formData = new FormData();
-      formData.append("title", trimmedTitle);
-      formData.append("description", editDescription.trim());
-      formData.append("buttonText", editButtonText.trim() || "Shop Now");
-      formData.append("buttonLink", editButtonLink.trim() || "/products");
+      formData.append(
+        "primaryButtonText",
+        editPrimaryButtonText.trim() || DEFAULT_PRIMARY_BUTTON_TEXT
+      );
+      formData.append(
+        "primaryButtonLink",
+        primaryLink || DEFAULT_PRIMARY_BUTTON_LINK
+      );
+      formData.append(
+        "secondaryButtonText",
+        editSecondaryButtonText.trim() || DEFAULT_SECONDARY_BUTTON_TEXT
+      );
+      formData.append(
+        "secondaryButtonLink",
+        secondaryLink || DEFAULT_SECONDARY_BUTTON_LINK
+      );
       formData.append("order", String(parsedOrder));
       formData.append("active", String(editActive));
 
@@ -290,7 +310,7 @@ export default function HeroListPage() {
 
   const deleteHero = async (id: string) => {
     const confirmDelete = window.confirm(
-      "Are you sure you want to delete this hero?",
+      "Are you sure you want to delete this hero?"
     );
 
     if (!confirmDelete) return;
@@ -329,7 +349,9 @@ export default function HeroListPage() {
   if (loadError) {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50 p-6">
-        <p className="font-semibold text-red-700">Failed to load hero banners</p>
+        <p className="font-semibold text-red-700">
+          Failed to load hero banners
+        </p>
         <p className="mt-1 text-sm text-red-600">{loadError}</p>
         <Button
           type="button"
@@ -351,7 +373,8 @@ export default function HeroListPage() {
         <div>
           <h1 className="text-2xl font-bold">Hero Banners</h1>
           <p className="text-sm text-muted-foreground">
-            Manage homepage hero banners, ordering, and visibility
+            Manage homepage hero banner images, bottom action buttons, ordering,
+            and visibility
           </p>
         </div>
 
@@ -371,14 +394,14 @@ export default function HeroListPage() {
         </Card>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {heroes.map((hero) => (
+          {heroes.map((hero, index) => (
             <Card key={hero._id} className="overflow-hidden">
               {/* Image */}
               <div className="relative h-52 w-full bg-slate-100">
                 {hero.image ? (
                   <Image
                     src={hero.image}
-                    alt={hero.title}
+                    alt={`Hero banner ${index + 1}`}
                     fill
                     sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
                     className="object-cover"
@@ -394,27 +417,34 @@ export default function HeroListPage() {
                 </span>
               </div>
 
-              <CardHeader>
-                <CardTitle className="line-clamp-1">{hero.title}</CardTitle>
-              </CardHeader>
-
-              <CardContent className="space-y-4">
-                <p className="line-clamp-2 text-sm text-muted-foreground">
-                  {hero.description || "No subtitle provided"}
-                </p>
-
-                <div className="space-y-1 text-sm">
-                  <div>
-                    <span className="font-semibold">Button:</span>{" "}
-                    {hero.buttonText}
+              <CardContent className="space-y-4 pt-4">
+                <div className="grid gap-2.5 text-sm">
+                  <div className="rounded-lg border bg-muted/30 p-2.5">
+                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Button 1 (Primary)
+                    </div>
+                    <div className="mt-0.5 font-semibold">
+                      {hero.primaryButtonText}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {hero.primaryButtonLink}
+                    </div>
                   </div>
-                  <div className="truncate">
-                    <span className="font-semibold">Link:</span>{" "}
-                    {hero.buttonLink}
+
+                  <div className="rounded-lg border bg-muted/30 p-2.5">
+                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Button 2 (Secondary)
+                    </div>
+                    <div className="mt-0.5 font-semibold">
+                      {hero.secondaryButtonText}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {hero.secondaryButtonLink}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                   <button
                     type="button"
                     disabled={togglingId === hero._id}
@@ -509,64 +539,83 @@ export default function HeroListPage() {
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="edit-hero-title" className="text-sm font-medium">
-                Title
-              </label>
-              <Input
-                id="edit-hero-title"
-                required
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                disabled={savingEdit}
-              />
-            </div>
+            {/* Button 1 (Primary) */}
+            <div className="space-y-2 rounded-lg border p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Button 1 (Primary)
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="edit-hero-btn1-text"
+                    className="text-sm font-medium"
+                  >
+                    Label
+                  </label>
+                  <Input
+                    id="edit-hero-btn1-text"
+                    value={editPrimaryButtonText}
+                    onChange={(e) => setEditPrimaryButtonText(e.target.value)}
+                    placeholder={DEFAULT_PRIMARY_BUTTON_TEXT}
+                    disabled={savingEdit}
+                  />
+                </div>
 
-            <div className="space-y-1.5">
-              <label
-                htmlFor="edit-hero-description"
-                className="text-sm font-medium"
-              >
-                Subtitle / Description
-              </label>
-              <Input
-                id="edit-hero-description"
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                disabled={savingEdit}
-              />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="edit-hero-btn-text"
-                  className="text-sm font-medium"
-                >
-                  Button Text
-                </label>
-                <Input
-                  id="edit-hero-btn-text"
-                  value={editButtonText}
-                  onChange={(e) => setEditButtonText(e.target.value)}
-                  disabled={savingEdit}
-                />
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="edit-hero-btn1-link"
+                    className="text-sm font-medium"
+                  >
+                    Link
+                  </label>
+                  <Input
+                    id="edit-hero-btn1-link"
+                    value={editPrimaryButtonLink}
+                    onChange={(e) => setEditPrimaryButtonLink(e.target.value)}
+                    placeholder={DEFAULT_PRIMARY_BUTTON_LINK}
+                    disabled={savingEdit}
+                  />
+                </div>
               </div>
+            </div>
 
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="edit-hero-btn-link"
-                  className="text-sm font-medium"
-                >
-                  Button Link
-                </label>
-                <Input
-                  id="edit-hero-btn-link"
-                  value={editButtonLink}
-                  onChange={(e) => setEditButtonLink(e.target.value)}
-                  placeholder="/products"
-                  disabled={savingEdit}
-                />
+            {/* Button 2 (Secondary) */}
+            <div className="space-y-2 rounded-lg border p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Button 2 (Secondary)
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="edit-hero-btn2-text"
+                    className="text-sm font-medium"
+                  >
+                    Label
+                  </label>
+                  <Input
+                    id="edit-hero-btn2-text"
+                    value={editSecondaryButtonText}
+                    onChange={(e) => setEditSecondaryButtonText(e.target.value)}
+                    placeholder={DEFAULT_SECONDARY_BUTTON_TEXT}
+                    disabled={savingEdit}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="edit-hero-btn2-link"
+                    className="text-sm font-medium"
+                  >
+                    Link
+                  </label>
+                  <Input
+                    id="edit-hero-btn2-link"
+                    value={editSecondaryButtonLink}
+                    onChange={(e) => setEditSecondaryButtonLink(e.target.value)}
+                    placeholder={DEFAULT_SECONDARY_BUTTON_LINK}
+                    disabled={savingEdit}
+                  />
+                </div>
               </div>
             </div>
 

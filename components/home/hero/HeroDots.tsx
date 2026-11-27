@@ -12,7 +12,7 @@ export default function HeroDots({
   onSelect,
 }: HeroDotsProps) {
   return (
-    <div className="absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 gap-3">
+    <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 gap-2.5 sm:bottom-4 sm:gap-3">
       {Array.from({ length: count }).map((_, index) => {
         const active = current === index;
 
@@ -28,8 +28,8 @@ export default function HeroDots({
               rounded-full
               ${
                 active
-                  ? "w-8 h-3 bg-white"
-                  : "w-3 h-3 bg-white/40 hover:bg-white/70"
+                  ? "h-2 w-6 bg-white sm:h-2.5 sm:w-8"
+                  : "h-2 w-2 bg-white/40 hover:bg-white/70 sm:h-2.5 sm:w-2.5"
               }
             `}
           />

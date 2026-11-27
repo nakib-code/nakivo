@@ -1,43 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
+
 import { requireStaff } from "@/lib/auth";
-import connectDB from "@/lib/db";
-import HeroBanner from "@/models/HeroBanner";
 import { deleteFromCloudinary, uploadToCloudinary } from "@/lib/cloudinary";
-
-const MAX_HERO_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
-const ALLOWED_IMAGE_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "image/avif",
-]);
-
-function isSafeButtonLink(link: string): boolean {
-  const trimmed = link.trim();
-
-  if (!trimmed) {
-    return true;
-  }
-
-  // Reject control characters or whitespace-obfuscated schemes
-  if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
-    return false;
-  }
-
-  // Allow relative internal paths starting with a single "/" (reject protocol-relative "//")
-  if (trimmed.startsWith("/")) {
-    return !trimmed.startsWith("//");
-  }
-
-  try {
-    const parsed = new URL(trimmed);
-    return parsed.protocol === "https:" || parsed.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
+import connectDB from "@/lib/db";
+import {
+  ALLOWED_HERO_IMAGE_MIME_TYPES,
+  DEFAULT_PRIMARY_BUTTON_LINK,
+  DEFAULT_PRIMARY_BUTTON_TEXT,
+  DEFAULT_SECONDARY_BUTTON_LINK,
+  DEFAULT_SECONDARY_BUTTON_TEXT,
+  isSafeButtonLink,
+  MAX_HERO_IMAGE_SIZE,
+  normalizeHeroBanner,
+  parseHeroOrder,
+} from "@/lib/hero";
+import HeroBanner from "@/models/HeroBanner";
 
 export async function POST(request: NextRequest) {
   let uploadedPublicId = "";
@@ -73,45 +51,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rawTitle = formData.get("title");
-    const rawDescription = formData.get("description");
-    const rawButtonText = formData.get("buttonText");
-    const rawButtonLink = formData.get("buttonLink");
+    const rawPrimaryButtonText = formData.get("primaryButtonText");
+    const rawPrimaryButtonLink = formData.get("primaryButtonLink");
+    const rawSecondaryButtonText = formData.get("secondaryButtonText");
+    const rawSecondaryButtonLink = formData.get("secondaryButtonLink");
     const rawOrder = formData.get("order");
     const rawActive = formData.get("active");
     const rawImage = formData.get("image");
 
-    const title = typeof rawTitle === "string" ? rawTitle.trim() : "";
-    const description =
-      typeof rawDescription === "string" ? rawDescription.trim() : "";
-    const buttonText =
-      typeof rawButtonText === "string" ? rawButtonText.trim() : "";
-    const buttonLink =
-      typeof rawButtonLink === "string" ? rawButtonLink.trim() : "";
+    const primaryButtonText =
+      typeof rawPrimaryButtonText === "string"
+        ? rawPrimaryButtonText.trim()
+        : "";
+    const primaryButtonLink =
+      typeof rawPrimaryButtonLink === "string"
+        ? rawPrimaryButtonLink.trim()
+        : "";
+    const secondaryButtonText =
+      typeof rawSecondaryButtonText === "string"
+        ? rawSecondaryButtonText.trim()
+        : "";
+    const secondaryButtonLink =
+      typeof rawSecondaryButtonLink === "string"
+        ? rawSecondaryButtonLink.trim()
+        : "";
 
-    let order = 0;
-    if (typeof rawOrder === "string" && rawOrder.trim() !== "") {
-      const parsedOrder = Number(rawOrder);
-      if (!Number.isInteger(parsedOrder) || parsedOrder < 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Display order must be a non-negative integer",
-          },
-          { status: 400 }
-        );
-      }
-      order = parsedOrder;
+    const order = parseHeroOrder(rawOrder);
+    if (order === null) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Display order must be a non-negative integer",
+        },
+        { status: 400 }
+      );
     }
 
     const active =
       typeof rawActive === "string" ? rawActive !== "false" : true;
 
-    if (!title || !(rawImage instanceof File)) {
+    if (!(rawImage instanceof File)) {
       return NextResponse.json(
         {
           success: false,
-          message: "Title and image required",
+          message: "Banner image is required",
         },
         {
           status: 400,
@@ -143,7 +126,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!ALLOWED_IMAGE_MIME_TYPES.has(rawImage.type)) {
+    if (!ALLOWED_HERO_IMAGE_MIME_TYPES.has(rawImage.type)) {
       return NextResponse.json(
         {
           success: false,
@@ -156,12 +139,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isSafeButtonLink(buttonLink)) {
+    if (!isSafeButtonLink(primaryButtonLink)) {
       return NextResponse.json(
         {
           success: false,
           message:
-            "Invalid button link. Only relative paths or http/https URLs are allowed",
+            "Invalid Button 1 link. Only relative paths or http/https URLs are allowed",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (!isSafeButtonLink(secondaryButtonLink)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Invalid Button 2 link. Only relative paths or http/https URLs are allowed",
         },
         {
           status: 400,
@@ -172,20 +168,17 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     // Upload Image
-    const uploaded = await uploadToCloudinary(
-      rawImage,
-      "ecommerce/heroes"
-    );
+    const uploaded = await uploadToCloudinary(rawImage, "ecommerce/heroes");
     uploadedPublicId = uploaded.public_id;
 
     // Save Database
     const hero = await HeroBanner.create({
-      title,
-      description,
       image: uploaded.secure_url,
       imagePublicId: uploaded.public_id,
-      buttonText: buttonText || "Shop Now",
-      buttonLink: buttonLink || "/products",
+      primaryButtonText: primaryButtonText || DEFAULT_PRIMARY_BUTTON_TEXT,
+      primaryButtonLink: primaryButtonLink || DEFAULT_PRIMARY_BUTTON_LINK,
+      secondaryButtonText: secondaryButtonText || DEFAULT_SECONDARY_BUTTON_TEXT,
+      secondaryButtonLink: secondaryButtonLink || DEFAULT_SECONDARY_BUTTON_LINK,
       active,
       order,
     });
@@ -195,7 +188,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        data: hero,
+        data: normalizeHeroBanner(hero.toObject()),
       },
       {
         status: 201,
@@ -222,58 +215,49 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function GET() {
+  try {
+    const auth = await requireStaff();
 
-export async function GET(){
+    if (!auth.authorized) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: auth.message,
+        },
+        {
+          status: auth.status,
+        }
+      );
+    }
 
-try{
-const auth = await requireStaff();
+    await connectDB();
 
-if (!auth.authorized) {
-return NextResponse.json(
-{
-success:false,
-message:auth.message
-},
-{
-status:auth.status
-}
-);
-}
+    const banners = await HeroBanner.find()
+      .select(
+        "image primaryButtonText primaryButtonLink secondaryButtonText secondaryButtonLink buttonText buttonLink active order"
+      )
+      .sort({
+        order: 1,
+        createdAt: -1,
+      })
+      .lean();
 
-await connectDB();
+    return NextResponse.json({
+      success: true,
+      data: banners.map((banner) => normalizeHeroBanner(banner)),
+    });
+  } catch (error) {
+    console.error("Load Hero Error:", error);
 
-
-const banners =
-await HeroBanner
-.find()
-.sort({
-order:1,
-createdAt:-1
-});
-
-
-return NextResponse.json(
-{
-success:true,
-data:banners
-}
-);
-
-
-}
-catch(error){
-console.error("Load Hero Error:", error);
-
-return NextResponse.json(
-{
-success:false,
-message:"Failed to load hero"
-},
-{
-status:500
-}
-);
-
-}
-
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Failed to load hero banners",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
 }

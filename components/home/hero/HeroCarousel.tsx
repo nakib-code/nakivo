@@ -77,7 +77,11 @@ export default function HeroCarousel({ banners }: Props) {
         <div className="flex">
           {banners.map((banner, index) => (
             <div key={banner._id} className="min-w-0 flex-[0_0_100%]">
-              <HeroSlide banner={banner} priority={index === 0} />
+              <HeroSlide
+                banner={banner}
+                priority={index === 0}
+                hasMultiple={banners.length > 1}
+              />
             </div>
           ))}
         </div>
