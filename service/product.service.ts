@@ -109,3 +109,52 @@ export async function getProducts(
       : undefined,
   }));
 }
+
+/**
+ * Fetches all in-stock products for the /combo builder with lean fields
+ * (omitting heavy `description` from MongoDB and the RSC payload) so no
+ * available product or category is hidden behind a fixed 100-item cap.
+ */
+export async function getComboProducts(): Promise<IProduct[]> {
+  await connectDB();
+
+  const products = await Product.find({ stock: { $gt: 0 } })
+    .select(
+      "title price category stock images isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt"
+    )
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return products.map((product) => ({
+    _id: String(product._id),
+    title: product.title,
+    description: "",
+    price: Number(product.price),
+    category: product.category,
+    stock: Number(product.stock ?? 0),
+    ratings: 0,
+    soldCount: 0,
+    isFeatured: false,
+    isFlashSale: Boolean(product.isFlashSale),
+    flashSalePrice:
+      product.flashSalePrice !== undefined && product.flashSalePrice !== null
+        ? Number(product.flashSalePrice)
+        : undefined,
+    flashSaleStart: product.flashSaleStart
+      ? new Date(product.flashSaleStart)
+      : undefined,
+    flashSaleEnd: product.flashSaleEnd
+      ? new Date(product.flashSaleEnd)
+      : undefined,
+    images:
+      Array.isArray(product.images) && product.images.length > 0
+        ? [
+            {
+              url: product.images[0]!.url,
+              publicId: product.images[0]!.publicId,
+            },
+          ]
+        : [],
+    createdAt: product.createdAt ? new Date(product.createdAt) : undefined,
+  }));
+}

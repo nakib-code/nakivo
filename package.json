@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node --import ./__tests__/register.mjs --test __tests__/marketing.test.ts"
+    "test": "node --import ./__tests__/register.mjs --test __tests__/marketing.test.ts __tests__/combo.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",

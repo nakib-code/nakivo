@@ -67,22 +67,12 @@ export default function ProductDetailsActions({
       return;
     }
 
-    let addedCount = 0;
-    let lastReason: string | undefined;
+    const result = addToCart(product, quantity);
+    const addedCount = result.addedQuantity ?? (result.added ? 1 : 0);
 
-    for (let i = 0; i < quantity; i++) {
-      const result = addToCart(product);
-      if (result.added) {
-        addedCount += 1;
-      } else {
-        lastReason = result.reason;
-        break;
-      }
-    }
-
-    if (addedCount === 0) {
+    if (!result.added || addedCount === 0) {
       toast.error(
-        lastReason === "max_stock"
+        result.reason === "max_stock"
           ? "Maximum available quantity already in cart"
           : "Unable to add product to cart"
       );
@@ -123,20 +113,10 @@ export default function ProductDetailsActions({
       return;
     }
 
-    let addedCount = 0;
-    let lastReason: string | undefined;
+    const result = addToCart(product, quantity);
+    const addedCount = result.addedQuantity ?? (result.added ? 1 : 0);
 
-    for (let i = 0; i < quantity; i++) {
-      const result = addToCart(product);
-      if (result.added) {
-        addedCount += 1;
-      } else {
-        lastReason = result.reason;
-        break;
-      }
-    }
-
-    if (addedCount === 0 && lastReason !== "max_stock") {
+    if (!result.added && result.reason !== "max_stock") {
       toast.error("Unable to add product to cart");
       return;
     }

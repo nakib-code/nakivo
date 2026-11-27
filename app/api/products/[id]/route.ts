@@ -474,6 +474,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
     revalidatePath("/");
     revalidatePath("/products");
+    revalidatePath("/combo");
     revalidatePath(`/products/${id}`);
 
     return NextResponse.json(
@@ -561,6 +562,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
 
     revalidatePath("/");
     revalidatePath("/products");
+    revalidatePath("/combo");
     revalidatePath(`/products/${id}`);
 
     return NextResponse.json(
@@ -703,6 +705,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       );
 
       revalidatePath("/");
+      revalidatePath("/products");
+      revalidatePath("/combo");
       revalidatePath(`/products/${id}`);
 
       return NextResponse.json(
@@ -791,6 +795,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
     revalidatePath("/");
     revalidatePath("/products");
+    revalidatePath("/combo");
     revalidatePath(`/products/${id}`);
 
     return NextResponse.json(

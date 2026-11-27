@@ -32,12 +32,12 @@ export default async function SuccessPage({
         {/* Heading */}
 
         <h1 className="mt-6 text-2xl font-bold text-slate-900">
-          Payment Successful!
+          Order Confirmed!
         </h1>
 
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Thank you for your order. Your payment has been
-          successfully processed.
+          Thank you for your order. Your Cash on Delivery order has been
+          received and is now being processed.
         </p>
 
         {/* Order ID */}

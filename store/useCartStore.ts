@@ -2,11 +2,29 @@ import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { getActiveFlashSalePricing } from "@/lib/flash-sale";
+import { getMaxOrderableQuantity } from "@/lib/order-validation";
 import type { IProduct } from "@/types";
 
 export interface AddToCartResult {
   added: boolean;
+  addedQuantity?: number;
   reason?: "invalid" | "out_of_stock" | "max_stock";
+}
+
+export interface AddManyToCartItem {
+  product: IProduct;
+  quantity: number;
+}
+
+export interface AddManyToCartResult {
+  addedUnits: number;
+  requestedUnits: number;
+  addedItems: Array<{
+    product: IProduct;
+    quantity: number;
+    price: number;
+  }>;
+  skippedCount: number;
 }
 
 export interface CartSyncResult {
@@ -50,7 +68,8 @@ export interface CartItem {
 interface CartState {
   cart: CartItem[];
 
-  addToCart: (product: IProduct) => AddToCartResult;
+  addToCart: (product: IProduct, quantity?: number) => AddToCartResult;
+  addManyToCart: (items: ReadonlyArray<AddManyToCartItem>) => AddManyToCartResult;
   removeFromCart: (id: string) => void;
   updateQuantity: (
     id: string,
@@ -90,101 +109,181 @@ export const useCartStore =
         // ADD TO CART
         // ========================================
 
-        addToCart: (product) => {
+        addToCart: (product, requestedQuantity = 1) => {
           if (!product._id) {
-            return { added: false, reason: "invalid" };
+            return { added: false, addedQuantity: 0, reason: "invalid" };
           }
 
-          const currentCart =
-            get().cart;
+          const desiredQty =
+            Number.isFinite(requestedQuantity) && requestedQuantity > 0
+              ? Math.floor(requestedQuantity)
+              : 1;
 
-          const existingItem =
-            currentCart.find(
-              (item) =>
-                item._id === product._id
-            );
+          const currentCart = get().cart;
 
-          const stock = Number(
-            product.stock ?? 0
+          const existingItem = currentCart.find(
+            (item) => item._id === product._id
           );
 
-          if (stock <= 0) {
-            return { added: false, reason: "out_of_stock" };
+          const stock = Number(product.stock ?? 0);
+          const maxOrderable = getMaxOrderableQuantity(stock);
+
+          if (maxOrderable <= 0) {
+            return { added: false, addedQuantity: 0, reason: "out_of_stock" };
           }
 
-          const {
-            price,
-            isFlashSale,
-          } =
-            getProductPrice(product);
+          const { price, isFlashSale } = getProductPrice(product);
 
           // ========================================
           // EXISTING ITEM
           // ========================================
 
           if (existingItem) {
-            if (
-              existingItem.quantity >=
-              stock
-            ) {
-              return { added: false, reason: "max_stock" };
+            const availableToAdd = Math.max(0, maxOrderable - existingItem.quantity);
+
+            if (availableToAdd <= 0) {
+              return { added: false, addedQuantity: 0, reason: "max_stock" };
             }
 
+            const addedQuantity = Math.min(desiredQty, availableToAdd);
+
             set({
-              cart: currentCart.map(
-                (item) =>
-                  item._id === product._id
-                    ? {
-                        ...item,
-                        price,
-                        regularPrice:
-                          Number(
-                            product.price
-                          ),
-                        isFlashSale,
-                        stock,
-                        quantity:
-                          item.quantity + 1,
-                      }
-                    : item
+              cart: currentCart.map((item) =>
+                item._id === product._id
+                  ? {
+                      ...item,
+                      price,
+                      regularPrice: Number(product.price),
+                      isFlashSale,
+                      stock: maxOrderable,
+                      quantity: item.quantity + addedQuantity,
+                    }
+                  : item
               ),
             });
 
-            return { added: true };
+            return { added: true, addedQuantity };
           }
 
           // ========================================
           // NEW ITEM
           // ========================================
 
+          const addedQuantity = Math.min(desiredQty, maxOrderable);
+
           set({
             cart: [
               ...currentCart,
               {
                 _id: product._id,
-
                 title: product.title,
-
                 price,
-
-                regularPrice:
-                  Number(product.price),
-
+                regularPrice: Number(product.price),
                 isFlashSale,
-
-                image:
-                  product.images?.[0]
-                    ?.url ||
-                  "",
-
-                stock,
-
-                quantity: 1,
+                image: product.images?.[0]?.url || "",
+                stock: maxOrderable,
+                quantity: addedQuantity,
               },
             ],
           });
 
-          return { added: true };
+          return { added: true, addedQuantity };
+        },
+
+        // ========================================
+        // ADD MANY TO CART (Atomic batch for Combo)
+        // ========================================
+
+        addManyToCart: (entries) => {
+          const nextCart = get().cart.map((item) => ({ ...item }));
+          const addedItems: Array<{
+            product: IProduct;
+            quantity: number;
+            price: number;
+          }> = [];
+          let addedUnits = 0;
+          let requestedUnits = 0;
+          let skippedCount = 0;
+
+          for (const entry of entries) {
+            const product = entry.product;
+            const qty =
+              Number.isFinite(entry.quantity) && entry.quantity > 0
+                ? Math.floor(entry.quantity)
+                : 0;
+
+            if (!product._id || qty <= 0) {
+              continue;
+            }
+
+            requestedUnits += qty;
+            const maxOrderable = getMaxOrderableQuantity(
+              Number(product.stock ?? 0)
+            );
+
+            if (maxOrderable <= 0) {
+              skippedCount += qty;
+              continue;
+            }
+
+            const { price, isFlashSale } = getProductPrice(product);
+            const existingIndex = nextCart.findIndex(
+              (item) => item._id === product._id
+            );
+
+            if (existingIndex >= 0) {
+              const existing = nextCart[existingIndex]!;
+              const availableToAdd = Math.max(0, maxOrderable - existing.quantity);
+              const addedQty = Math.min(qty, availableToAdd);
+
+              if (addedQty <= 0) {
+                skippedCount += qty;
+                continue;
+              }
+
+              nextCart[existingIndex] = {
+                ...existing,
+                title: product.title,
+                price,
+                regularPrice: Number(product.price),
+                isFlashSale,
+                stock: maxOrderable,
+                quantity: existing.quantity + addedQty,
+              };
+
+              addedUnits += addedQty;
+              skippedCount += qty - addedQty;
+              addedItems.push({ product, quantity: addedQty, price });
+            } else {
+              const addedQty = Math.min(qty, maxOrderable);
+
+              nextCart.push({
+                _id: product._id,
+                title: product.title,
+                price,
+                regularPrice: Number(product.price),
+                isFlashSale,
+                image: product.images?.[0]?.url || "",
+                stock: maxOrderable,
+                quantity: addedQty,
+              });
+
+              addedUnits += addedQty;
+              skippedCount += qty - addedQty;
+              addedItems.push({ product, quantity: addedQty, price });
+            }
+          }
+
+          if (addedUnits > 0) {
+            set({ cart: nextCart });
+          }
+
+          return {
+            addedUnits,
+            requestedUnits,
+            addedItems,
+            skippedCount,
+          };
         },
 
         // ========================================
@@ -223,7 +322,7 @@ export const useCartStore =
             return;
           }
 
-          if (quantity > item.stock) {
+          if (quantity > getMaxOrderableQuantity(item.stock)) {
             return;
           }
 
@@ -259,9 +358,9 @@ export const useCartStore =
 
           for (const item of get().cart) {
             const fresh = productMap.get(item._id);
-            const freshStock = Number(fresh?.stock ?? 0);
+            const freshStock = getMaxOrderableQuantity(Number(fresh?.stock ?? 0));
 
-            if (!fresh || !Number.isFinite(freshStock) || freshStock <= 0) {
+            if (!fresh || freshStock <= 0) {
               removedCount += 1;
               continue;
             }

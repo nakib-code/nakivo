@@ -8,6 +8,10 @@ export const navLinks = [
     href: "/products",
   },
   {
+    title: "Combo",
+    href: "/combo",
+  },
+  {
     title: "Categories",
   },
   {

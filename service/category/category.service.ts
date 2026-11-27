@@ -1,3 +1,4 @@
+import connectDB from "@/lib/db";
 import Category from "@/models/Category";
 
 import {
@@ -47,10 +48,12 @@ export async function createCategory(
 }
 
 export async function getAllCategories() {
+  await connectDB();
   return Category.find().sort({ createdAt: -1 });
 }
 
 export async function getCategoryById(id: string) {
+  await connectDB();
   const category = await Category.findById(id);
 
   if (!category) {

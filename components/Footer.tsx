@@ -10,6 +10,7 @@ import { CookiePreferencesButton } from "@/components/marketing/CookieConsentBan
 
 const shopLinks = [
   { label: "All Products", href: "/products" },
+  { label: "Combo Deals", href: "/combo" },
   { label: "Electronics", href: "/products?category=Electronics" },
   { label: "Fashion", href: "/products?category=Fashion" },
   { label: "Shoes", href: "/products?category=Shoes" },

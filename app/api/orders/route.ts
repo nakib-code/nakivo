@@ -8,6 +8,11 @@ import {
   normalizeDeliverySettings,
 } from "@/lib/delivery";
 import { getActiveFlashSalePricing } from "@/lib/flash-sale";
+import {
+  isValidPhoneNumber,
+  MAX_ORDER_DISTINCT_ITEMS,
+  MAX_ORDER_ITEM_QUANTITY,
+} from "@/lib/order-validation";
 import { getCurrentUser } from "@/lib/auth";
 import {
   OrderServiceError,
@@ -127,7 +132,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (items.length > 100) {
+    if (items.length > MAX_ORDER_DISTINCT_ITEMS) {
       return errorResponse(
         "Too many different products in one order."
       );
@@ -156,8 +161,10 @@ export async function POST(req: NextRequest) {
       return errorResponse("Please provide a valid city.");
     }
 
-    if (!phone || phone.length > 30) {
-      return errorResponse("Please provide a valid phone number.");
+    if (!isValidPhoneNumber(phone)) {
+      return errorResponse(
+        "Please provide a valid phone number (e.g., 01XXXXXXXXX)."
+      );
     }
 
     if (
@@ -184,7 +191,7 @@ export async function POST(req: NextRequest) {
       if (
         !Number.isSafeInteger(quantity) ||
         quantity < 1 ||
-        quantity > 100
+        quantity > MAX_ORDER_ITEM_QUANTITY
       ) {
         return errorResponse("Invalid product quantity.");
       }
@@ -193,9 +200,9 @@ export async function POST(req: NextRequest) {
       const combinedQuantity =
         (quantities.get(productId) ?? 0) + quantity;
 
-      if (combinedQuantity > 100) {
+      if (combinedQuantity > MAX_ORDER_ITEM_QUANTITY) {
         return errorResponse(
-          "The quantity for a product cannot exceed 100."
+          `The quantity for a product cannot exceed ${MAX_ORDER_ITEM_QUANTITY}.`
         );
       }
 
@@ -211,13 +218,19 @@ export async function POST(req: NextRequest) {
       const orderItems: OrderItemSnapshot[] = [];
       let subtotal = 0;
 
-      // Read current products and calculate authoritative server prices.
+      // Batch-fetch all requested products in a single query and compute authoritative server prices.
+      const productIds = Array.from(quantities.keys());
+      const productsQuery = Product.find({ _id: { $in: productIds } });
+      if (session) {
+        productsQuery.session(session);
+      }
+      const fetchedProducts = await productsQuery;
+      const productMap = new Map(
+        fetchedProducts.map((doc) => [doc._id.toString(), doc])
+      );
+
       for (const [productId, quantity] of quantities.entries()) {
-        const productQuery = Product.findById(productId);
-        if (session) {
-          productQuery.session(session);
-        }
-        const product = await productQuery;
+        const product = productMap.get(productId);
 
         if (!product) {
           throw new OrderServiceError(

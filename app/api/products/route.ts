@@ -559,6 +559,7 @@ export async function POST(req: NextRequest) {
 
     revalidatePath("/");
     revalidatePath("/products");
+    revalidatePath("/combo");
 
     // ========================================
     // Response

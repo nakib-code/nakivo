@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 
 import { formatBDT } from "@/lib/currency";
+import { isValidPhoneNumber } from "@/lib/order-validation";
 import {
   trackAddPaymentInfo,
   trackBeginCheckout,
@@ -46,6 +47,7 @@ export default function CheckoutPage() {
 
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState(false);
+  const [settingsRetryCount, setSettingsRetryCount] = useState(0);
   const beginCheckoutTrackedRef = useRef(false);
 
   // Track begin_checkout once when authenticated checkout loads with items
@@ -80,8 +82,6 @@ export default function CheckoutPage() {
         setSettingsLoading(true);
         setSettingsError(false);
 
-        // Assumes the settings route is /api/store-settings.
-
         const response = await fetch("/api/settings/delivery", {
           cache: "no-store",
         });
@@ -115,7 +115,7 @@ export default function CheckoutPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [settingsRetryCount]);
 
   // Validate persisted cart prices and stock against the database
   useEffect(() => {
@@ -224,8 +224,8 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!shipping.phone.trim()) {
-      toast.error("Phone number required");
+    if (!isValidPhoneNumber(shipping.phone)) {
+      toast.error("Please enter a valid phone number (e.g., 01XXXXXXXXX).");
       return;
     }
 
@@ -442,9 +442,18 @@ export default function CheckoutPage() {
                 Loading delivery charges...
               </p>
             ) : settingsError || !deliverySettings ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                Unable to load delivery charges. Please refresh the page and try
-                again.
+              <div className="flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  Unable to load delivery charges. Please retry or refresh the
+                  page.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSettingsRetryCount((count) => count + 1)}
+                  className="w-fit shrink-0 rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                >
+                  Retry
+                </button>
               </div>
             ) : (
               <div className="space-y-3">
