@@ -51,6 +51,13 @@ async function sendOrderOtpEmail(
     return { delivered: true, provider: "resend" };
   }
 
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      "Order OTP email delivery failed: RESEND_API_KEY is not configured in production."
+    );
+    return { delivered: false, provider: "resend" };
+  }
+
   console.info(`[ORDER OTP] Verification code for ${toEmail}: ${code}`);
   return { delivered: true, provider: "dev-log" };
 }

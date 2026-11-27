@@ -44,10 +44,10 @@ export default function FlashSale({
   }
 
   return (
-    <section className="w-full py-8 sm:py-10 lg:py-14">
+    <section className="w-full py-6 sm:py-8 lg:py-10">
       <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 xl:px-10">
         {/* Flash Sale Header */}
-        <div className="relative isolate overflow-hidden rounded-2xl bg-gradient-to-br from-neutral-950 via-neutral-900 to-red-950 px-5 py-7 text-white shadow-lg sm:rounded-3xl sm:px-8 sm:py-9 lg:px-10 lg:py-10">
+        <div className="relative isolate overflow-hidden rounded-2xl bg-gradient-to-br from-neutral-950 via-neutral-900 to-red-950 px-4 py-6 text-white shadow-lg sm:rounded-3xl sm:px-7 sm:py-8 lg:px-10 lg:py-9">
           {/* Background decorations */}
           <div
             aria-hidden="true"
@@ -115,11 +115,12 @@ export default function FlashSale({
         </div>
 
         {/* Flash Sale Products */}
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-7 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
           {activeFlashSaleProducts.map((product) => (
             <FlashSaleCard
               key={product._id}
               product={product}
+              now={currentTime}
             />
           ))}
         </div>

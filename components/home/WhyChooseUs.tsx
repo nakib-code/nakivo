@@ -37,9 +37,9 @@ const features = [
 export default function WhyChooseUs() {
   return (
     <section className="w-full bg-slate-50/70">
-      <div className="mx-auto w-full max-w-[1600px] px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-20 xl:px-10">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-10 sm:px-6 sm:py-12 lg:px-8 lg:py-16 xl:px-10">
         {/* Section heading */}
-        <div className="mx-auto mb-9 max-w-2xl text-center sm:mb-12">
+        <div className="mx-auto mb-7 max-w-2xl text-center sm:mb-10">
           <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600 shadow-sm sm:text-xs">
             The NAKIVO Difference
           </span>

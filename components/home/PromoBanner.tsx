@@ -5,7 +5,7 @@ import { ArrowRight, Sparkles } from "lucide-react";
 
 export default function PromoBanner() {
   return (
-    <section className="w-full py-6 sm:py-8 lg:py-10">
+    <section className="w-full py-4 sm:py-6 lg:py-8">
       <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="relative isolate overflow-hidden rounded-2xl bg-slate-950 sm:rounded-3xl">
           {/* Background image */}
@@ -14,7 +14,6 @@ export default function PromoBanner() {
               src="/promo-banner.png"
               alt="Special collection promotion"
               fill
-              priority
               sizes="(max-width: 640px) 100vw, (max-width: 1280px) 95vw, 1600px"
               className="object-cover object-center"
             />
@@ -33,7 +32,7 @@ export default function PromoBanner() {
           />
 
           {/* Content */}
-          <div className="flex min-h-[400px] items-center px-5 py-10 sm:min-h-[440px] sm:px-10 sm:py-12 md:min-h-[480px] lg:min-h-[520px] lg:px-14 xl:px-16">
+          <div className="flex min-h-[300px] items-center px-5 py-8 sm:min-h-[380px] sm:px-10 sm:py-10 md:min-h-[420px] lg:min-h-[460px] lg:px-14 xl:px-16">
             <div className="max-w-2xl">
               {/* Badge */}
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-2 backdrop-blur-md sm:mb-6">

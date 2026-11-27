@@ -129,10 +129,11 @@ const ProductSchema: Schema<IProduct> = new Schema(
   }
 );
 
+ProductSchema.index({ createdAt: -1 });
 ProductSchema.index({ category: 1, createdAt: -1 });
 ProductSchema.index({ isFeatured: 1, createdAt: -1 });
 ProductSchema.index({ isFlashSale: 1, flashSaleStart: 1, flashSaleEnd: 1 });
-ProductSchema.index({ price: 1 });
+ProductSchema.index({ price: 1, createdAt: -1 });
 ProductSchema.index({ stock: 1 });
 ProductSchema.index({ placement: 1, stock: 1, createdAt: -1 });
 

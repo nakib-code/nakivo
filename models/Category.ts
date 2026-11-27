@@ -53,6 +53,8 @@ const CategorySchema = new Schema<ICategory>(
 
 
 
+CategorySchema.index({ createdAt: -1 });
+
 const Category =
   (mongoose.models?.Category as Model<ICategory>) ||
   mongoose.model<ICategory>(

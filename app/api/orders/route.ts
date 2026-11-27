@@ -1,5 +1,5 @@
 import { revalidatePath } from "next/cache";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { isValidObjectId, type ClientSession } from "mongoose";
 
 import connectDB from "@/lib/db";
@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (idempotencyKey) {
-      const existingOrder = await Order.findOne({ idempotencyKey });
+      const existingOrder = await Order.findOne({ idempotencyKey }).lean();
 
       if (existingOrder) {
         const existingUserId = existingOrder.user
@@ -180,8 +180,22 @@ export async function POST(req: NextRequest) {
           : null;
         const currentUserId = user?.id ?? null;
 
-        // Only return the existing order if owned by the same user or both are guest
-        if (existingUserId === currentUserId) {
+        const rawRequestPhone =
+          typeof shippingAddress?.phone === "string"
+            ? shippingAddress.phone.trim()
+            : "";
+        const requestNormalizedPhone = rawRequestPhone
+          ? normalizePhoneNumber(rawRequestPhone)
+          : "";
+        const isSameAuthenticatedUser =
+          existingUserId !== null && existingUserId === currentUserId;
+        const isSameGuestPhone =
+          existingUserId === null &&
+          currentUserId === null &&
+          Boolean(existingOrder.normalizedPhone) &&
+          existingOrder.normalizedPhone === requestNormalizedPhone;
+
+        if (isSameAuthenticatedUser || isSameGuestPhone) {
           const existingOrderId = existingOrder._id.toString();
           return NextResponse.json(
             {
@@ -729,7 +743,7 @@ export async function POST(req: NextRequest) {
         "code" in createErr &&
         (createErr as { code?: unknown }).code === 11000
       ) {
-        const existingOrder = await Order.findOne({ idempotencyKey });
+        const existingOrder = await Order.findOne({ idempotencyKey }).lean();
 
         if (existingOrder) {
           const existingUserId = existingOrder.user
@@ -737,7 +751,15 @@ export async function POST(req: NextRequest) {
             : null;
           const currentUserId = user?.id ?? null;
 
-          if (existingUserId === currentUserId) {
+          const isSameAuthenticatedUser =
+            existingUserId !== null && existingUserId === currentUserId;
+          const isSameGuestPhone =
+            existingUserId === null &&
+            currentUserId === null &&
+            Boolean(existingOrder.normalizedPhone) &&
+            existingOrder.normalizedPhone === normalizedPhone;
+
+          if (isSameAuthenticatedUser || isSameGuestPhone) {
             const existingOrderId = existingOrder._id.toString();
             return NextResponse.json(
               {
@@ -749,6 +771,8 @@ export async function POST(req: NextRequest) {
               { status: 200 }
             );
           }
+
+          return errorResponse("Duplicate order request.", 409);
         }
       }
 
@@ -804,47 +828,47 @@ export async function POST(req: NextRequest) {
     const orderIdString = createdOrder._id.toString();
     const trackingEventId = generatePurchaseEventId(orderIdString);
 
-    // Authoritative server-side Meta CAPI Purchase dispatch (never blocks or breaks order creation)
-    try {
-      const consentCookie = req.cookies.get(CONSENT_COOKIE_NAME)?.value;
-      const consent = parseConsentCookieValue(consentCookie);
-      const reqContext = extractRequestMetaContext(req);
+    // Authoritative server-side Meta CAPI Purchase dispatch (non-blocking via after())
+    const consentCookie = req.cookies.get(CONSENT_COOKIE_NAME)?.value;
+    const consent = parseConsentCookieValue(consentCookie);
+    const reqContext = extractRequestMetaContext(req);
+    const trackingPayload = {
+      eventName: "purchase" as const,
+      eventId: trackingEventId,
+      eventSourceUrl: reqContext.eventSourceUrl,
+      currency: "BDT",
+      value: createdOrder.totalPrice,
+      orderId: orderIdString,
+      items: createdOrder.orderItems.map((item) => ({
+        item_id: String(item.product),
+        item_name: item.title,
+        price: item.price,
+        quantity: item.quantity,
+      })),
+      user: {
+        email: finalCustomerEmail || user?.email || undefined,
+        phone: normalizedPhone,
+        city,
+        country: "bd",
+        externalId: user?.id || undefined,
+        clientIpAddress: reqContext.clientIpAddress,
+        clientUserAgent: reqContext.clientUserAgent,
+        fbp: reqContext.fbp,
+        fbc: reqContext.fbc,
+      },
+    };
 
-      await sendMetaCapiEvent(
-        {
-          eventName: "purchase",
-          eventId: trackingEventId,
-          eventSourceUrl: reqContext.eventSourceUrl,
-          currency: "BDT",
-          value: createdOrder.totalPrice,
-          orderId: orderIdString,
-          items: createdOrder.orderItems.map((item) => ({
-            item_id: String(item.product),
-            item_name: item.title,
-            price: item.price,
-            quantity: item.quantity,
-          })),
-          user: {
-            email: finalCustomerEmail || user?.email || undefined,
-            phone: normalizedPhone,
-            city,
-            country: "bd",
-            externalId: user?.id || undefined,
-            clientIpAddress: reqContext.clientIpAddress,
-            clientUserAgent: reqContext.clientUserAgent,
-            fbp: reqContext.fbp,
-            fbc: reqContext.fbc,
-          },
-        },
-        {
+    after(async () => {
+      try {
+        await sendMetaCapiEvent(trackingPayload, {
           consentMarketing: Boolean(consent?.marketing),
           consentAnalytics: Boolean(consent?.analytics),
           path: "/checkout",
-        }
-      );
-    } catch (trackingError) {
-      console.error("Server Purchase Tracking Error:", trackingError);
-    }
+        });
+      } catch (trackingError) {
+        console.error("Server Purchase Tracking Error:", trackingError);
+      }
+    });
 
     return NextResponse.json(
       {

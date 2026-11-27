@@ -151,7 +151,10 @@ export const authOptions: NextAuthOptions = {
   // =========================
   session: {
     strategy: "jwt",
+    maxAge: 60 * 60 * 24 * 7, // 7 days
   },
+
+  useSecureCookies: process.env.NODE_ENV === "production",
 
   // =========================
   // Secret

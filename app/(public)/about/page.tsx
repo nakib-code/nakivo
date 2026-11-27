@@ -57,7 +57,7 @@ export default function AboutPage() {
       {/* Hero Section */}
       <section className="border-b border-slate-100">
         <div
-          className={`${containerClass} grid items-center gap-10 py-12 sm:gap-12 sm:py-16 lg:min-h-[560px] lg:grid-cols-2 lg:gap-14 lg:py-20`}
+          className={`${containerClass} grid items-center gap-8 py-8 sm:gap-10 sm:py-12 lg:min-h-[480px] lg:grid-cols-2 lg:gap-12 lg:py-16`}
         >
           {/* Content */}
           <div className="min-w-0">
@@ -177,7 +177,7 @@ export default function AboutPage() {
       {/* Our Story */}
       <section>
         <div
-          className={`${containerClass} grid gap-6 py-14 sm:gap-8 sm:py-20 lg:grid-cols-2 lg:items-center lg:gap-16 lg:py-28`}
+          className={`${containerClass} grid gap-6 py-10 sm:gap-8 sm:py-14 lg:grid-cols-2 lg:items-center lg:gap-12 lg:py-16`}
         >
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
@@ -218,7 +218,7 @@ export default function AboutPage() {
 
       {/* Why Choose Us */}
       <section className="bg-slate-50">
-        <div className={`${containerClass} py-14 sm:py-20 lg:py-24`}>
+        <div className={`${containerClass} py-10 sm:py-14 lg:py-16`}>
           <div className="max-w-2xl">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
               Why NAKIVO
@@ -263,7 +263,7 @@ export default function AboutPage() {
 
       {/* Call to Action */}
       <section>
-        <div className={`${containerClass} py-12 sm:py-16 lg:py-24`}>
+        <div className={`${containerClass} py-10 sm:py-12 lg:py-16`}>
           <div className="relative isolate overflow-hidden rounded-3xl bg-black px-5 py-10 text-center sm:rounded-[2rem] sm:px-10 sm:py-16">
             <div
               aria-hidden="true"

@@ -51,13 +51,13 @@ export default async function UserLayout({
 
       {/* Content */}
 
-      <div className="md:ml-64">
+      <div className="min-w-0 overflow-x-clip md:ml-64">
 
 
         <UserHeader />
 
 
-        <main className="p-4 md:p-6">
+        <main className="min-w-0 p-4 md:p-6">
 
           {children}
 

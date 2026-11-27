@@ -101,7 +101,7 @@ export default function ContactPage() {
     <div className="min-h-screen bg-white text-slate-950">
       {/* Page Header */}
       <section className="border-b border-slate-100">
-        <div className={`${containerClass} py-12 sm:py-16 lg:py-20`}>
+        <div className={`${containerClass} py-8 sm:py-12 lg:py-14`}>
           <div className="max-w-3xl">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400 sm:text-sm">
               Get In Touch
@@ -122,7 +122,7 @@ export default function ContactPage() {
       {/* Contact Content */}
       <section aria-label="Contact information and message form">
         <div
-          className={`${containerClass} grid gap-8 py-8 sm:gap-10 sm:py-12 lg:grid-cols-[0.85fr_1.15fr] lg:gap-12 lg:py-16`}
+          className={`${containerClass} grid gap-6 py-6 sm:gap-8 sm:py-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-10 lg:py-12`}
         >
           {/* Contact Information */}
           <aside className="flex flex-col">

@@ -22,7 +22,7 @@ export default function AdminHeader() {
             type="button"
             onClick={() => setMobileMenuOpen(true)}
             aria-label="Open admin navigation"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border text-slate-700 hover:bg-slate-100 md:hidden"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border text-slate-700 hover:bg-slate-100 md:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>

@@ -4,7 +4,18 @@ export const ORDER_OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 export const ORDER_OTP_MAX_ATTEMPTS = 5;
 
 function getOtpSecret(): string {
-  return process.env.NEXTAUTH_SECRET || "nakibo-order-otp-fallback-secret";
+  const secret = process.env.NEXTAUTH_SECRET?.trim();
+  if (secret) {
+    return secret;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "NEXTAUTH_SECRET must be configured in production for OTP signing."
+    );
+  }
+
+  return "nakibo-order-otp-dev-secret";
 }
 
 export function generateSixDigitOtp(): string {

@@ -41,8 +41,8 @@ export default function Navbar({
           transition-all duration-300
           ${
             scrolled
-              ? "h-16"
-              : "h-20"
+              ? "h-14 lg:h-16"
+              : "h-16 lg:h-20"
           }
         `}
       >

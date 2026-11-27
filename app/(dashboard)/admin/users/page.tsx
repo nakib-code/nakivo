@@ -477,6 +477,7 @@ export default function AdminUsersPage() {
                             }
 
                             fill
+                            sizes="40px"
 
                             className="
                               object-cover

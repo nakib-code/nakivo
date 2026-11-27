@@ -69,9 +69,15 @@ const MAX_BUCKETS = 2000;
 const contactRateLimit = new Map<string, { count: number; resetAt: number }>();
 
 function getClientIp(req: NextRequest): string {
-  const forwarded = req.headers.get("x-forwarded-for");
+  const vercelForwarded = req.headers.get("x-vercel-forwarded-for");
   const realIp = req.headers.get("x-real-ip");
-  return forwarded?.split(",")[0]?.trim() || realIp?.trim() || "unknown";
+  const forwarded = req.headers.get("x-forwarded-for");
+  return (
+    vercelForwarded?.split(",")[0]?.trim() ||
+    realIp?.trim() ||
+    forwarded?.split(",")[0]?.trim() ||
+    "unknown"
+  );
 }
 
 function isContactRateLimited(ip: string, now = Date.now()): boolean {
@@ -82,7 +88,13 @@ function isContactRateLimited(ip: string, now = Date.now()): boolean {
       }
     }
     if (contactRateLimit.size >= MAX_BUCKETS) {
-      contactRateLimit.clear();
+      const evictCount = Math.ceil(MAX_BUCKETS * 0.2);
+      let removed = 0;
+      for (const key of contactRateLimit.keys()) {
+        contactRateLimit.delete(key);
+        removed += 1;
+        if (removed >= evictCount) break;
+      }
     }
   }
 

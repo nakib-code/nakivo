@@ -135,15 +135,18 @@ export async function getTrackingLogs(query: TrackingLogsQuery = {}): Promise<{
   const limit = Math.min(100, Math.max(1, Math.floor(query.limit ?? 25)));
   const skip = (page - 1) * limit;
 
+  const ALLOWED_PLATFORMS = new Set(["meta_capi", "ga4", "gtm", "google_ads"]);
+  const ALLOWED_STATUSES = new Set(["success", "failed", "skipped"]);
+
   const filter: Record<string, unknown> = {};
-  if (query.platform && query.platform !== "all") {
+  if (query.platform && ALLOWED_PLATFORMS.has(query.platform)) {
     filter.platform = query.platform;
   }
-  if (query.status && query.status !== "all") {
+  if (query.status && ALLOWED_STATUSES.has(query.status)) {
     filter.status = query.status;
   }
   if (query.eventName && query.eventName !== "all") {
-    filter.eventName = query.eventName;
+    filter.eventName = query.eventName.trim().slice(0, 80);
   }
 
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);

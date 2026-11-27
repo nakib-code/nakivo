@@ -26,10 +26,10 @@ export default async function AdminLayout({
         <AdminSidebar />
       </div>
 
-      <div className="md:ml-64">
+      <div className="min-w-0 overflow-x-clip md:ml-64">
         <AdminHeader />
 
-        <main className="p-4 md:p-6">{children}</main>
+        <main className="min-w-0 p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

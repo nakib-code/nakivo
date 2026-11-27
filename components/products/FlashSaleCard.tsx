@@ -19,6 +19,7 @@ import type { IProduct } from "@/types";
 
 interface FlashSaleCardProps {
   product: IProduct;
+  now?: number | null;
 }
 
 interface TimeLeft {
@@ -30,13 +31,18 @@ interface TimeLeft {
 
 export default function FlashSaleCard({
   product,
+  now: externalNow,
 }: FlashSaleCardProps) {
   const addToCart = useCartStore((state) => state.addToCart);
 
-  const [now, setNow] = useState<number | null>(null);
+  const [localNow, setLocalNow] = useState<number | null>(null);
 
   useEffect(() => {
-    const updateNow = () => setNow(Date.now());
+    if (externalNow !== undefined) {
+      return;
+    }
+
+    const updateNow = () => setLocalNow(Date.now());
     const initial = window.setTimeout(updateNow, 0);
     const interval = window.setInterval(updateNow, 1000);
 
@@ -44,7 +50,9 @@ export default function FlashSaleCard({
       window.clearTimeout(initial);
       window.clearInterval(interval);
     };
-  }, []);
+  }, [externalNow]);
+
+  const now = externalNow !== undefined ? externalNow : localNow;
 
   const isSaleActive =
     now !== null && isFlashSaleActiveAt(product, now);
@@ -149,9 +157,9 @@ export default function FlashSaleCard({
     type="button"
     aria-label={`Add ${product.title} to wishlist`}
     onClick={() => toast.info("Wishlist feature coming soon")}
-    className="absolute right-2.5 top-12 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-md backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:bg-black hover:text-white sm:right-4 sm:top-16 sm:h-10 sm:w-10"
+    className="absolute right-2.5 top-12 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-md backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:bg-black hover:text-white sm:right-4 sm:top-16"
   >
-    <Heart size={15} className="sm:h-[18px] sm:w-[18px]" />
+    <Heart size={16} className="sm:h-[18px] sm:w-[18px]" />
   </button>
 
   {/* Product Image */}

@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import connectDB from "@/lib/db";
 import Category from "@/models/Category";
 
@@ -26,11 +28,10 @@ export async function createCategory(
     : createCategorySlug(data.name);
 
   const existingCategory = await Category.findOne({
-    $or: [
-      { name: data.name.trim() },
-      { slug },
-    ],
-  });
+    $or: [{ name: data.name.trim() }, { slug }],
+  })
+    .select("_id")
+    .lean();
 
   if (existingCategory) {
     throw new Error("Category already exists");
@@ -47,14 +48,17 @@ export async function createCategory(
   return category;
 }
 
-export async function getAllCategories() {
+export const getAllCategories = cache(async () => {
   await connectDB();
-  return Category.find().sort({ createdAt: -1 });
-}
+  return Category.find()
+    .select("name slug description image")
+    .sort({ createdAt: -1 })
+    .lean();
+});
 
 export async function getCategoryById(id: string) {
   await connectDB();
-  const category = await Category.findById(id);
+  const category = await Category.findById(id).lean();
 
   if (!category) {
     throw new Error("Category not found");
@@ -77,12 +81,11 @@ export async function updateCategory(
     const slug = createCategorySlug(data.name);
 
     const existingCategory = await Category.findOne({
-      $or: [
-        { name: data.name.trim() },
-        { slug },
-      ],
+      $or: [{ name: data.name.trim() }, { slug }],
       _id: { $ne: id },
-    });
+    })
+      .select("_id")
+      .lean();
 
     if (existingCategory) {
       throw new Error("Category name already exists");
@@ -106,13 +109,11 @@ export async function updateCategory(
 }
 
 export async function deleteCategory(id: string) {
-  const category = await Category.findById(id);
+  const category = await Category.findByIdAndDelete(id).lean();
 
   if (!category) {
     throw new Error("Category not found");
   }
-
-  await Category.findByIdAndDelete(id);
 
   return category;
 }

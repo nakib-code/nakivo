@@ -24,112 +24,91 @@ export async function GET() {
 
     await connectDB();
 
-    // =========================
-    // Dashboard Counts
-    // =========================
+    const currentYear = new Date().getUTCFullYear();
+    const yearStart = new Date(Date.UTC(currentYear, 0, 1));
+    const nextYearStart = new Date(Date.UTC(currentYear + 1, 0, 1));
 
     const [
       totalUsers,
       totalProducts,
       totalOrders,
+      revenue,
+      recentOrders,
+      lowStockProducts,
+      sales,
     ] = await Promise.all([
       User.countDocuments(),
       Product.countDocuments(),
       Order.countDocuments(),
-    ]);
-
-    // =========================
-    // Total Revenue
-    // =========================
-
-    const revenue = await Order.aggregate([
-      {
-        $match: {
-          isPaid: true,
-          status: { $ne: "Cancelled" },
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: {
-            $sum: "$totalPrice",
+      Order.aggregate([
+        {
+          $match: {
+            isPaid: true,
+            status: { $ne: "Cancelled" },
           },
         },
-      },
-    ]);
-
-    const totalRevenue =
-      revenue[0]?.totalRevenue || 0;
-
-    // =========================
-    // Recent Orders
-    // =========================
-
-    const recentOrders = await Order.find()
-      .populate("user", "name email")
-      .sort({
-        createdAt: -1,
-      })
-      .limit(5)
-      .lean();
-
-    // =========================
-    // Low Stock Products
-    // =========================
-
-    const lowStockProducts =
-      await Product.find({
+        {
+          $group: {
+            _id: null,
+            totalRevenue: {
+              $sum: "$totalPrice",
+            },
+          },
+        },
+      ]),
+      Order.find()
+        .select(
+          "user shippingAddress.name totalPrice status isPaid paymentMethod createdAt"
+        )
+        .populate("user", "name email")
+        .sort({
+          createdAt: -1,
+        })
+        .limit(5)
+        .lean(),
+      Product.find({
         stock: {
           $lte: 5,
         },
       })
-        .select(
-          "title stock price images"
-        )
+        .select("title stock price images")
         .sort({
           stock: 1,
         })
         .limit(5)
-        .lean();
-
-    // =========================
-    // Monthly Sales (Current Year Only)
-    // =========================
-
-    const currentYear = new Date().getUTCFullYear();
-    const yearStart = new Date(Date.UTC(currentYear, 0, 1));
-    const nextYearStart = new Date(Date.UTC(currentYear + 1, 0, 1));
-
-    const sales = await Order.aggregate([
-      {
-        $match: {
-          isPaid: true,
-          status: { $ne: "Cancelled" },
-          createdAt: {
-            $gte: yearStart,
-            $lt: nextYearStart,
-          },
-        },
-      },
-      {
-        $group: {
-          _id: {
-            month: {
-              $month: "$createdAt",
+        .lean(),
+      Order.aggregate([
+        {
+          $match: {
+            isPaid: true,
+            status: { $ne: "Cancelled" },
+            createdAt: {
+              $gte: yearStart,
+              $lt: nextYearStart,
             },
           },
-          revenue: {
-            $sum: "$totalPrice",
+        },
+        {
+          $group: {
+            _id: {
+              month: {
+                $month: "$createdAt",
+              },
+            },
+            revenue: {
+              $sum: "$totalPrice",
+            },
           },
         },
-      },
-      {
-        $sort: {
-          "_id.month": 1,
+        {
+          $sort: {
+            "_id.month": 1,
+          },
         },
-      },
+      ]),
     ]);
+
+    const totalRevenue = revenue[0]?.totalRevenue || 0;
 
     const monthNames = [
       "Jan",

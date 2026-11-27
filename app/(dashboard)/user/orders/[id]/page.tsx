@@ -303,7 +303,6 @@ export default function OrderDetailsPage() {
                             fill
                             sizes="(max-width: 640px) 64px, 80px"
                             className="object-cover"
-                            unoptimized
                           />
                         ) : (
                           <Package className="h-7 w-7 text-muted-foreground" />

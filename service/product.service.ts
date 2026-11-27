@@ -39,11 +39,9 @@ function getSortOrder(sort?: string): Record<string, 1 | -1> {
   }
 }
 
-export async function getProductsPaginated(
-  options: GetProductsOptions = {}
-): Promise<PaginatedProductsResult> {
-  await connectDB();
-
+function buildProductListQuery(
+  options: GetProductsOptions
+): Record<string, unknown> {
   const query: Record<string, unknown> = {
     $or: [
       { placement: { $in: ["main", "both"] } },
@@ -58,7 +56,7 @@ export async function getProductsPaginated(
 
   if (options.search?.trim()) {
     query.title = {
-      $regex: escapeRegex(options.search.trim()),
+      $regex: escapeRegex(options.search.trim().slice(0, 100)),
       $options: "i",
     };
   }
@@ -75,38 +73,35 @@ export async function getProductsPaginated(
     query.flashSaleEnd = { $gt: now };
   }
 
-  const limit =
-    options.limit !== undefined &&
-    Number.isInteger(options.limit) &&
-    options.limit > 0
-      ? Math.min(options.limit, 100)
-      : 24;
+  return query;
+}
 
-  const page =
-    options.page !== undefined &&
-    Number.isInteger(options.page) &&
-    options.page >= 1
-      ? options.page
-      : 1;
+const PRODUCT_CARD_SELECT =
+  "title price category stock placement comboPrice images ratings soldCount isFeatured isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt updatedAt";
 
-  const skip = (page - 1) * limit;
-
-  const [total, rawProducts] = await Promise.all([
-    Product.countDocuments(query),
-    Product.find(query)
-      .select(
-        "title description price category stock placement comboPrice images ratings soldCount isFeatured isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt updatedAt"
-      )
-      .sort(getSortOrder(options.sort))
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-  ]);
-
-  const products: IProduct[] = rawProducts.map((product) => ({
+function mapLeanProductToCard(product: {
+  _id: unknown;
+  title: string;
+  price: number;
+  category: string;
+  stock?: number;
+  placement?: unknown;
+  comboPrice?: number | null;
+  ratings?: number;
+  soldCount?: number;
+  isFeatured?: boolean;
+  isFlashSale?: boolean;
+  flashSalePrice?: number | null;
+  flashSaleStart?: Date;
+  flashSaleEnd?: Date;
+  images?: { url: string; publicId: string }[];
+  createdAt?: Date;
+  updatedAt?: Date;
+}): IProduct {
+  return {
     _id: String(product._id),
     title: product.title,
-    description: product.description,
+    description: "",
     price: Number(product.price),
     category: product.category,
     stock: Number(product.stock ?? 0),
@@ -129,19 +124,54 @@ export async function getProductsPaginated(
     flashSaleEnd: product.flashSaleEnd
       ? new Date(product.flashSaleEnd)
       : undefined,
-    images: Array.isArray(product.images)
-      ? product.images.map((image) => ({
-          url: image.url,
-          publicId: image.publicId,
-        }))
-      : [],
-    createdAt: product.createdAt
-      ? new Date(product.createdAt)
-      : undefined,
-    updatedAt: product.updatedAt
-      ? new Date(product.updatedAt)
-      : undefined,
-  }));
+    images:
+      Array.isArray(product.images) && product.images.length > 0
+        ? [
+            {
+              url: product.images[0]!.url,
+              publicId: product.images[0]!.publicId,
+            },
+          ]
+        : [],
+    createdAt: product.createdAt ? new Date(product.createdAt) : undefined,
+    updatedAt: product.updatedAt ? new Date(product.updatedAt) : undefined,
+  };
+}
+
+export async function getProductsPaginated(
+  options: GetProductsOptions = {}
+): Promise<PaginatedProductsResult> {
+  await connectDB();
+
+  const query = buildProductListQuery(options);
+
+  const limit =
+    options.limit !== undefined &&
+    Number.isInteger(options.limit) &&
+    options.limit > 0
+      ? Math.min(options.limit, 100)
+      : 24;
+
+  const page =
+    options.page !== undefined &&
+    Number.isInteger(options.page) &&
+    options.page >= 1
+      ? options.page
+      : 1;
+
+  const skip = (page - 1) * limit;
+
+  const [total, rawProducts] = await Promise.all([
+    Product.countDocuments(query),
+    Product.find(query)
+      .select(PRODUCT_CARD_SELECT)
+      .sort(getSortOrder(options.sort))
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+  ]);
+
+  const products: IProduct[] = rawProducts.map(mapLeanProductToCard);
 
   return {
     products,
@@ -155,8 +185,24 @@ export async function getProductsPaginated(
 export async function getProducts(
   options: GetProductsOptions = {}
 ): Promise<IProduct[]> {
-  const result = await getProductsPaginated(options);
-  return result.products;
+  await connectDB();
+
+  const query = buildProductListQuery(options);
+
+  const limit =
+    options.limit !== undefined &&
+    Number.isInteger(options.limit) &&
+    options.limit > 0
+      ? Math.min(options.limit, 100)
+      : 24;
+
+  const rawProducts = await Product.find(query)
+    .select(PRODUCT_CARD_SELECT)
+    .sort(getSortOrder(options.sort))
+    .limit(limit)
+    .lean();
+
+  return rawProducts.map(mapLeanProductToCard);
 }
 
 const MAX_COMBO_PRODUCTS = 200;

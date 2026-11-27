@@ -69,6 +69,7 @@ export default async function UserProfilePage() {
                 src={image}
                 alt={name}
                 fill
+                sizes="96px"
                 className="object-cover"
               />
             ) : (

@@ -25,13 +25,13 @@ export async function getUserByEmail(
     query.select("+password");
   }
 
-  return query;
+  return query.lean();
 }
 
 export async function getUserById(id: string) {
   await connectDB();
 
-  return User.findById(id);
+  return User.findById(id).lean();
 }
 
 export async function validateCredentials(
@@ -88,27 +88,33 @@ export async function createGoogleUser(
   });
 }
 
-export async function findOrCreateGoogleUser(
-  data: GoogleUserData
-) {
+export async function findOrCreateGoogleUser(data: GoogleUserData) {
   const normalizedEmail = data.email.trim().toLowerCase();
 
-  let user = await getUserByEmail(normalizedEmail);
+  const existing = await getUserByEmail(normalizedEmail);
 
-  if (!user) {
-    user = await createGoogleUser({
+  if (!existing) {
+    const created = await createGoogleUser({
       ...data,
       email: normalizedEmail,
     });
-  } else if (user.provider !== "google") {
+    return {
+      _id: created._id,
+      role: created.role,
+      status: created.status,
+      provider: created.provider,
+    };
+  }
+
+  if (existing.provider !== "google") {
     // Prevent silent linking between unverified credentials accounts and Google OAuth
     throw new Error("OAuthAccountNotLinked");
   }
 
   // Do not allow blocked users to sign in with Google.
-  if (user.status !== "active") {
+  if (existing.status !== "active") {
     throw new Error("This account is blocked.");
   }
 
-  return user;
+  return existing;
 }

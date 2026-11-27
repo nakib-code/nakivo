@@ -24,7 +24,7 @@ export default function ComboBanner({ status }: ComboBannerProps) {
         className="pointer-events-none absolute -bottom-24 left-1/4 h-64 w-64 rounded-full bg-emerald-400/15 blur-3xl"
       />
 
-      <div className="relative px-5 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-12">
+      <div className="relative px-4 py-6 sm:px-7 sm:py-8 lg:px-10 lg:py-9">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           {/* Left: Offer Copy */}
           <div className="max-w-3xl">

@@ -31,7 +31,13 @@ function isRateLimited(ip: string, now = Date.now()): boolean {
       }
     }
     if (rateLimitStore.size >= MAX_RATE_LIMIT_BUCKETS) {
-      rateLimitStore.clear();
+      const evictCount = Math.ceil(MAX_RATE_LIMIT_BUCKETS * 0.2);
+      let removed = 0;
+      for (const key of rateLimitStore.keys()) {
+        rateLimitStore.delete(key);
+        removed += 1;
+        if (removed >= evictCount) break;
+      }
     }
   }
 

@@ -160,9 +160,11 @@ const OrderSchema: Schema<IOrder> = new Schema(
   }
 );
 
+OrderSchema.index({ createdAt: -1 });
 OrderSchema.index({ user: 1, createdAt: -1 });
 OrderSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
 OrderSchema.index({ normalizedPhone: 1, createdAt: -1 });
+OrderSchema.index({ "shippingAddress.phone": 1 });
 OrderSchema.index({ clientIp: 1, createdAt: -1 });
 OrderSchema.index({ status: 1, createdAt: -1 });
 OrderSchema.index({ isPaid: 1, createdAt: -1 });

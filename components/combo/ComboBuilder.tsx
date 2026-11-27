@@ -54,7 +54,6 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
     Record<string, number>
   >({});
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const productMap = useMemo(() => {
@@ -67,27 +66,11 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
     return map;
   }, [products]);
 
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    for (const product of products) {
-      if (product.category?.trim()) {
-        set.add(product.category.trim());
-      }
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [products]);
-
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
 
     return products
       .filter((product) => {
-        if (
-          selectedCategory !== "all" &&
-          product.category !== selectedCategory
-        ) {
-          return false;
-        }
         if (q && !product.title.toLowerCase().includes(q)) {
           return false;
         }
@@ -99,7 +82,7 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
         const bInStock = Number(b.stock ?? 0) > 0 ? 1 : 0;
         return bInStock - aInStock;
       });
-  }, [products, search, selectedCategory]);
+  }, [products, search]);
 
   const selectedEntries: ComboSelectionEntry[] = useMemo(() => {
     const entries: ComboSelectionEntry[] = [];
@@ -251,14 +234,14 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
   };
 
   return (
-    <div className="space-y-8 pb-28 lg:pb-12">
+    <div className="space-y-5 pb-24 sm:space-y-6 lg:pb-10">
       {/* Dedicated Combo Banner */}
       <ComboBanner status={status} />
 
-      {/* Search & Category Filter */}
+      {/* Search Bar */}
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="relative min-w-0 flex-1 md:max-w-md">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative min-w-0 flex-1 sm:max-w-md">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
               value={search}
@@ -267,7 +250,7 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
                 setVisibleCount(PAGE_SIZE);
               }}
               placeholder="Search products for your combo..."
-              className="h-11 w-full rounded-xl border-slate-200 bg-slate-50 pl-10 pr-10 text-sm shadow-none focus-visible:ring-1 focus-visible:ring-black"
+              className="h-11 w-full rounded-xl border-slate-200 bg-slate-50 pl-10 pr-11 text-sm shadow-none focus-visible:ring-1 focus-visible:ring-black"
             />
             {search && (
               <button
@@ -277,74 +260,46 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
                   setVisibleCount(PAGE_SIZE);
                 }}
                 aria-label="Clear search"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-black"
+                className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-200/60 hover:text-black"
               >
                 <X className="h-4 w-4" />
               </button>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedCategory("all");
-                setVisibleCount(PAGE_SIZE);
-              }}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
-                selectedCategory === "all"
-                  ? "bg-black text-white"
-                  : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-black"
-              }`}
-            >
-              All ({products.length})
-            </button>
-
-            {categories.map((category) => (
-              <button
-                key={category}
-                type="button"
-                onClick={() => {
-                  setSelectedCategory(category);
-                  setVisibleCount(PAGE_SIZE);
-                }}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
-                  selectedCategory === category
-                    ? "bg-black text-white"
-                    : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-black"
-                }`}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
+          <p className="text-xs font-medium text-slate-500">
+            Showing{" "}
+            <span className="font-semibold text-slate-900">
+              {filteredProducts.length}
+            </span>{" "}
+            combo-eligible {filteredProducts.length === 1 ? "product" : "products"}
+          </p>
         </div>
       </section>
 
       {/* Main Content: Product Grid + Sticky Combo Summary */}
-      <div className="grid gap-6 lg:grid-cols-12 lg:items-start lg:gap-8">
+      <div className="grid gap-5 lg:grid-cols-12 lg:items-start lg:gap-6">
         {/* Product Selection Grid */}
         <div className="lg:col-span-8 xl:col-span-9">
           {filteredProducts.length === 0 ? (
-            <div className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+            <div className="flex min-h-[240px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center sm:p-8">
               <Package className="h-10 w-10 text-slate-300" />
               <h2 className="mt-4 text-lg font-bold text-slate-900">
                 No products found
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Try clearing your search or selecting another category.
+                Try clearing your search to view all combo products.
               </p>
-              {(search || selectedCategory !== "all") && (
+              {search && (
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => {
                     setSearch("");
-                    setSelectedCategory("all");
                   }}
-                  className="mt-4"
+                  className="mt-4 min-h-11"
                 >
-                  Reset Filters
+                  Clear Search
                 </Button>
               )}
             </div>
@@ -479,9 +434,9 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
                               type="button"
                               onClick={() => handleDecreaseProduct(id)}
                               aria-label={`Decrease quantity of ${product.title}`}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-800 shadow-xs transition hover:bg-slate-200"
+                              className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-slate-800 shadow-xs transition hover:bg-slate-200"
                             >
-                              <Minus className="h-3.5 w-3.5" />
+                              <Minus className="h-4 w-4" />
                             </button>
 
                             <span className="text-xs font-bold text-slate-950">
@@ -493,16 +448,16 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
                               onClick={() => handleSelectProduct(product)}
                               disabled={selectedQty >= maxOrderable}
                               aria-label={`Increase quantity of ${product.title}`}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg bg-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                              className="flex h-10 w-10 items-center justify-center rounded-lg bg-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              <Plus className="h-3.5 w-3.5" />
+                              <Plus className="h-4 w-4" />
                             </button>
                           </div>
                         ) : (
                           <button
                             type="button"
                             onClick={() => handleSelectProduct(product)}
-                            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-xs font-bold text-slate-900 transition hover:border-black hover:bg-black hover:text-white active:scale-[0.98]"
+                            className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-xs font-bold text-slate-900 transition hover:border-black hover:bg-black hover:text-white active:scale-[0.98]"
                           >
                             <Plus className="h-3.5 w-3.5" />
                             Select for Combo
@@ -618,9 +573,9 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
                           type="button"
                           onClick={() => handleDecreaseProduct(id)}
                           aria-label={`Decrease ${product.title}`}
-                          className="flex h-6 w-6 items-center justify-center rounded border bg-white text-slate-600 hover:bg-slate-100"
+                          className="flex h-8 w-8 items-center justify-center rounded-md border bg-white text-slate-600 hover:bg-slate-100"
                         >
-                          <Minus className="h-3 w-3" />
+                          <Minus className="h-3.5 w-3.5" />
                         </button>
                         <button
                           type="button"
@@ -630,15 +585,15 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
                             getMaxOrderableQuantity(Number(product.stock ?? 0))
                           }
                           aria-label={`Increase ${product.title}`}
-                          className="flex h-6 w-6 items-center justify-center rounded border bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                          className="flex h-8 w-8 items-center justify-center rounded-md border bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40"
                         >
-                          <Plus className="h-3 w-3" />
+                          <Plus className="h-3.5 w-3.5" />
                         </button>
                         <button
                           type="button"
                           onClick={() => handleRemoveProduct(id)}
                           aria-label={`Remove ${product.title}`}
-                          className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600"
+                          className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -707,8 +662,8 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
       </div>
 
       {/* Mobile Sticky Bottom Bar */}
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur-md lg:hidden">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur-md lg:hidden">
+        <div className="mx-auto flex max-w-2xl items-center justify-between gap-2.5">
           <div className="min-w-0">
             <p
               className={`truncate text-xs font-bold ${
@@ -729,7 +684,7 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
               variant="outline"
               disabled={!status.isReady}
               onClick={handleAddComboToCart}
-              className="h-10 rounded-xl px-3 text-xs font-bold"
+              className="h-11 rounded-xl px-3 text-xs font-bold"
             >
               <ShoppingCart className="mr-1.5 h-3.5 w-3.5" />
               {status.isReady ? "Add to Cart" : `${status.selectedCount}/${status.minItems}`}
@@ -740,7 +695,7 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
               size="sm"
               disabled={!status.isReady}
               onClick={handleBuyComboNow}
-              className="h-10 rounded-xl bg-black px-3.5 text-xs font-bold text-white hover:bg-slate-800"
+              className="h-11 rounded-xl bg-black px-3.5 text-xs font-bold text-white hover:bg-slate-800"
             >
               <Zap className="mr-1.5 h-3.5 w-3.5" />
               {status.isReady ? "Buy Now" : "Select more"}

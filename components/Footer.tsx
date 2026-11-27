@@ -56,7 +56,7 @@ export default function Footer({
     <footer className="border-t border-white/10 bg-slate-950 text-white">
       <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8 xl:px-10">
         {/* Main Footer */}
-        <div className="grid grid-cols-1 gap-10 py-12 sm:grid-cols-2 lg:grid-cols-5 lg:gap-10 lg:py-16">
+        <div className="grid grid-cols-1 gap-8 py-10 sm:grid-cols-2 lg:grid-cols-5 lg:gap-10 lg:py-12">
           {/* Brand & Contact */}
           <div className="lg:col-span-2">
             <Link

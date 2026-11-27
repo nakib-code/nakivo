@@ -139,7 +139,9 @@ export function clearClientConsent(): void {
   }
 
   try {
-    document.cookie = `${CONSENT_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
+    const secureFlag =
+      window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `${CONSENT_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax${secureFlag}`;
   } catch {
     // Ignore
   }

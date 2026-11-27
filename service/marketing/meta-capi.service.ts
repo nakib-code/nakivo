@@ -40,10 +40,14 @@ export function extractRequestMetaContext(req: Request): {
   fbc?: string;
   eventSourceUrl?: string;
 } {
-  const forwardedFor = req.headers.get("x-forwarded-for");
+  const vercelForwarded = req.headers.get("x-vercel-forwarded-for");
   const realIp = req.headers.get("x-real-ip");
+  const forwardedFor = req.headers.get("x-forwarded-for");
   const clientIpAddress =
-    forwardedFor?.split(",")[0]?.trim() || realIp?.trim() || undefined;
+    vercelForwarded?.split(",")[0]?.trim() ||
+    realIp?.trim() ||
+    forwardedFor?.split(",")[0]?.trim() ||
+    undefined;
   const clientUserAgent = req.headers.get("user-agent") || undefined;
   const referer = req.headers.get("referer") || undefined;
 

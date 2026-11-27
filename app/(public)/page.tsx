@@ -39,7 +39,7 @@ export default async function HomePage() {
   ]);
 
   return (
-    <div className="space-y-20">
+    <div className="space-y-8 sm:space-y-12 lg:space-y-14">
       <Hero banners={banners} />
       <Categories />
       <FeaturedProducts products={featuredProducts} />

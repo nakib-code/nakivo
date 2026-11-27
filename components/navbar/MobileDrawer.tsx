@@ -89,8 +89,8 @@ export default function MobileDrawer({
             className="
               relative
               flex
-              h-10
-              w-10
+              h-11
+              w-11
               shrink-0
               items-center
               justify-center
@@ -135,8 +135,8 @@ export default function MobileDrawer({
             onClick={() => setOpen(true)}
             aria-label="Open menu"
             className="
-              h-10
-              w-10
+              h-11
+              w-11
               shrink-0
               rounded-full
             "

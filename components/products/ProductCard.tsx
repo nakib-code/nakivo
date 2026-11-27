@@ -141,7 +141,7 @@ export default function ProductCard({
           }}
           className="
             absolute right-2.5 top-2.5 z-20
-            flex h-8 w-8 items-center justify-center
+            flex h-10 w-10 items-center justify-center
             rounded-full bg-white/90
             text-slate-700 shadow-md
             backdrop-blur-sm
@@ -150,11 +150,10 @@ export default function ProductCard({
             hover:bg-black
             hover:text-white
             sm:right-4 sm:top-4
-            sm:h-10 sm:w-10
           "
         >
           <Heart
-            size={15}
+            size={16}
             className="sm:h-[18px] sm:w-[18px]"
           />
         </button>
@@ -177,11 +176,7 @@ export default function ProductCard({
                 src={image}
                 alt={product.title}
                 fill
-                sizes="
-                  (max-width: 640px) 50vw,
-                  (max-width: 1024px) 50vw,
-                  25vw
-                "
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 25vw"
                 className="
                   object-cover
                   transition-transform duration-700
@@ -324,12 +319,12 @@ export default function ProductCard({
             disabled={!hasStock}
             onClick={handleBuyNow}
             className="
-              flex min-w-0 items-center
+              flex min-h-10 min-w-0 items-center
               justify-center gap-1
               rounded-lg
               bg-black
               px-2 py-2.5
-              text-[10px] font-bold text-white
+              text-[11px] font-bold text-white
               transition-all duration-300
               hover:bg-slate-800
               hover:shadow-lg
@@ -338,9 +333,10 @@ export default function ProductCard({
               disabled:bg-slate-300
               disabled:text-slate-600
               disabled:hover:shadow-none
+              sm:min-h-11
               sm:gap-2
               sm:rounded-xl
-              sm:px-4 sm:py-3.5
+              sm:px-4 sm:py-3
               sm:text-sm
             "
           >
@@ -360,13 +356,13 @@ export default function ProductCard({
             disabled={!hasStock}
             onClick={handleAddToCart}
             className="
-              flex min-w-0 items-center
+              flex min-h-10 min-w-0 items-center
               justify-center gap-1
               rounded-lg
               border border-slate-200
               bg-slate-50
               px-2 py-2.5
-              text-[10px] font-bold text-slate-900
+              text-[11px] font-bold text-slate-900
               transition-all duration-300
               hover:border-slate-300
               hover:bg-slate-100
@@ -375,9 +371,10 @@ export default function ProductCard({
               disabled:cursor-not-allowed
               disabled:opacity-50
               disabled:hover:shadow-none
+              sm:min-h-11
               sm:gap-2
               sm:rounded-xl
-              sm:px-4 sm:py-3.5
+              sm:px-4 sm:py-3
               sm:text-sm
             "
           >

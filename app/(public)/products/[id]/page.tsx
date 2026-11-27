@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { isValidObjectId } from "mongoose";
 import {
   ArrowLeft,
@@ -44,6 +45,11 @@ function getProductPricing(product: {
   };
 }
 
+const getProductByIdCached = cache(async (id: string) => {
+  await connectDB();
+  return Product.findById(id).lean();
+});
+
 // ========================================
 // PAGE
 // ========================================
@@ -57,10 +63,7 @@ export async function generateMetadata({
     return { title: "Product Not Found" };
   }
 
-  await connectDB();
-  const product = await Product.findById(id)
-    .select("title description images")
-    .lean();
+  const product = await getProductByIdCached(id);
 
   if (!product) {
     return { title: "Product Not Found" };
@@ -93,9 +96,7 @@ export default async function ProductDetailsPage({
   // DATABASE
   // ========================================
 
-  await connectDB();
-
-  const product = await Product.findById(id).lean();
+  const product = await getProductByIdCached(id);
 
   if (!product) {
     notFound();

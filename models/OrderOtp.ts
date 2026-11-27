@@ -4,6 +4,7 @@ export interface IOrderOtp {
   normalizedPhone: string;
   email: string;
   codeHash: string;
+  clientIp?: string;
   attempts: number;
   used: boolean;
   expiresAt: Date;
@@ -17,7 +18,6 @@ const OrderOtpSchema = new Schema<IOrderOtp>(
       required: true,
       trim: true,
       maxlength: 20,
-      index: true,
     },
     email: {
       type: String,
@@ -30,6 +30,11 @@ const OrderOtpSchema = new Schema<IOrderOtp>(
     codeHash: {
       type: String,
       required: true,
+    },
+    clientIp: {
+      type: String,
+      trim: true,
+      maxlength: 64,
     },
     attempts: {
       type: Number,
@@ -52,7 +57,9 @@ const OrderOtpSchema = new Schema<IOrderOtp>(
 );
 
 OrderOtpSchema.index({ normalizedPhone: 1, email: 1, createdAt: -1 });
-OrderOtpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+OrderOtpSchema.index({ clientIp: 1, createdAt: -1 });
+// Retain records for 15 minutes to match OTP_RATE_WINDOW_MS (10m validity is still enforced via expiresAt)
+OrderOtpSchema.index({ createdAt: 1 }, { expireAfterSeconds: 900 });
 
 const OrderOtp: Model<IOrderOtp> =
   mongoose.models.OrderOtp ||
