@@ -1,5 +1,5 @@
 import mongoose, { Model, Schema } from "mongoose";
-import { IUser } from "@/types";
+import type { IUser } from "@/types";
 
 const UserSchema = new Schema<IUser>(
   {
@@ -31,8 +31,8 @@ const UserSchema = new Schema<IUser>(
 
     role: {
       type: String,
-      enum: ["customer", "admin"],
-      default: "customer",
+      enum: ["user", "customer", "manager", "admin"],
+      default: "user",
     },
 
     status: {

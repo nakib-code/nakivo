@@ -4,6 +4,7 @@ import mongoose, { startSession, type ClientSession } from "mongoose";
 
 import Order from "@/models/Order";
 import Product from "@/models/Product";
+import { getStockActionForTransition } from "@/lib/order-stock";
 
 export const ALLOWED_ORDER_STATUSES = [
   "Pending",
@@ -207,6 +208,51 @@ export function assertValidStatusTransition(
 }
 
 /**
+ * Atomically deducts product stock for all valid items when an order
+ * transitions from Pending into Processing (or directly into Delivered).
+ * Throws a 409 OrderServiceError if any product lacks sufficient stock.
+ */
+export async function deductStockForOrderItems(
+  orderItems: ReadonlyArray<{ product?: unknown; quantity?: unknown }> | undefined,
+  session?: ClientSession
+): Promise<void> {
+  const quantities = aggregateOrderItemQuantities(orderItems);
+  const applied: Array<{ productId: string; quantity: number }> = [];
+
+  try {
+    for (const [productId, quantity] of quantities.entries()) {
+      const result = await Product.updateOne(
+        { _id: productId, stock: { $gte: quantity } },
+        { $inc: { stock: -quantity } },
+        session ? { session } : undefined
+      );
+
+      if (result.modifiedCount !== 1) {
+        throw new OrderServiceError(
+          "Insufficient stock for one or more items in this order. Please verify inventory before confirming.",
+          409
+        );
+      }
+
+      applied.push({ productId, quantity });
+    }
+  } catch (error) {
+    if (!session && applied.length > 0) {
+      await Promise.allSettled(
+        applied.map(({ productId, quantity }) =>
+          Product.updateOne(
+            { _id: productId },
+            { $inc: { stock: quantity } }
+          )
+        )
+      );
+    }
+
+    throw error;
+  }
+}
+
+/**
  * Restores product stock for all valid items in a cancelled order.
  * Missing/deleted products are safely ignored (matchedCount === 0).
  */
@@ -332,12 +378,28 @@ export async function updateOrderStatus(
 
     assertValidStatusTransition(currentStatus, nextStatus);
 
-    const updateFields: { status: OrderStatus; isPaid?: boolean } = {
+    const wasStockDeducted = Boolean(existingOrder.stockDeducted);
+    const stockAction = getStockActionForTransition(
+      nextStatus,
+      wasStockDeducted
+    );
+
+    const updateFields: {
+      status: OrderStatus;
+      isPaid?: boolean;
+      stockDeducted?: boolean;
+    } = {
       status: nextStatus,
     };
 
     if (nextStatus === "Delivered" && existingOrder.paymentMethod === "COD") {
       updateFields.isPaid = true;
+    }
+
+    if (stockAction === "deduct") {
+      updateFields.stockDeducted = true;
+    } else if (stockAction === "restore") {
+      updateFields.stockDeducted = false;
     }
 
     // Atomic conditional claim prevents concurrent duplicate transitions.
@@ -369,14 +431,28 @@ export async function updateOrderStatus(
       );
     }
 
+    let stockDeductedInThisStep = false;
+
     try {
-      if (nextStatus === "Cancelled") {
+      if (stockAction === "deduct") {
+        await deductStockForOrderItems(updatedOrder.orderItems, session);
+        stockDeductedInThisStep = true;
+      } else if (stockAction === "restore") {
         await restoreStockForOrderItems(updatedOrder.orderItems, session);
-      } else if (nextStatus === "Delivered") {
+      }
+
+      if (nextStatus === "Delivered") {
         await incrementSoldCountForOrderItems(updatedOrder.orderItems, session);
       }
     } catch (sideEffectError) {
       if (!session) {
+        if (stockDeductedInThisStep) {
+          await restoreStockForOrderItems(updatedOrder.orderItems).catch(
+            (restoreError) =>
+              console.error("Order stock rollback error:", restoreError)
+          );
+        }
+
         await Order.updateOne(
           {
             _id: orderId,
@@ -386,6 +462,7 @@ export async function updateOrderStatus(
             $set: {
               status: currentStatus,
               isPaid: Boolean(existingOrder.isPaid),
+              stockDeducted: wasStockDeducted,
             },
           }
         ).catch((rollbackError) =>

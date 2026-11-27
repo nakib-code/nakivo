@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
+import { isStaffRole } from "@/lib/roles";
 import UserHeader from "@/components/user/UserHeader";
 import UserSidebar from "@/components/user/UserSidebar";
 
@@ -16,7 +17,7 @@ export default async function UserLayout({
     redirect("/login");
   }
 
-  if (user.role === "admin") {
+  if (isStaffRole(user.role)) {
     redirect("/admin");
   }
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import mongoose from "mongoose";
 
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { deleteFromCloudinary, uploadToCloudinary } from "@/lib/cloudinary";
 import connectDB from "@/lib/db";
 import HeroBanner from "@/models/HeroBanner";
@@ -53,7 +53,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   let newlyUploadedPublicId = "";
 
   try {
-    const auth = await requireAdmin();
+    const auth = await requireStaff();
 
     if (!auth.authorized) {
       return NextResponse.json(
@@ -341,7 +341,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   try {
-    const auth = await requireAdmin();
+    const auth = await requireStaff();
 
     if (!auth.authorized) {
       return NextResponse.json(

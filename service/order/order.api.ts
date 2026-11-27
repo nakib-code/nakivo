@@ -111,6 +111,61 @@ export async function getOrders(): Promise<Order[]> {
   return result.data;
 }
 
+export class OrderApiError extends Error {
+  readonly status?: number;
+  readonly requiresEmailOtp?: boolean;
+
+  constructor(
+    message: string,
+    options?: { status?: number; requiresEmailOtp?: boolean }
+  ) {
+    super(message);
+    this.name = "OrderApiError";
+    this.status = options?.status;
+    this.requiresEmailOtp = options?.requiresEmailOtp;
+  }
+}
+
+export async function requestOrderOtp(payload: {
+  phone: string;
+  email: string;
+}): Promise<{
+  success: boolean;
+  message: string;
+  expiresInSeconds?: number;
+  devOtp?: string;
+}> {
+  const response = await fetch("/api/orders/otp", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  const result = (await response.json().catch(() => null)) as {
+    success?: boolean;
+    message?: string;
+    expiresInSeconds?: number;
+    devOtp?: string;
+  } | null;
+
+  if (!response.ok || !result?.success) {
+    throw new OrderApiError(
+      result?.message || "Failed to send verification code.",
+      { status: response.status }
+    );
+  }
+
+  return {
+    success: true,
+    message: result.message || "Verification code sent.",
+    expiresInSeconds: result.expiresInSeconds,
+    devOtp: result.devOtp,
+  };
+}
+
 // ==================================================
 // CREATE ORDER
 // ==================================================
@@ -134,13 +189,19 @@ export async function createOrder(
   );
 
   const result = (await response.json().catch(() => null)) as
-    | (Partial<CreateOrderApiResponse> & { message?: string })
+    | (Partial<CreateOrderApiResponse> & {
+        message?: string;
+        requiresEmailOtp?: boolean;
+      })
     | null;
 
   if (!response.ok || !result) {
-    throw new Error(
-      result?.message ||
-        "Failed to create order"
+    throw new OrderApiError(
+      result?.message || "Failed to create order",
+      {
+        status: response.status,
+        requiresEmailOtp: Boolean(result?.requiresEmailOtp),
+      }
     );
   }
 

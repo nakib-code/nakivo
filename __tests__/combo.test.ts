@@ -121,15 +121,16 @@ describe("Order Quantity Cap & Phone Validation", () => {
     assert.equal(getMaxOrderableQuantity(500), MAX_ORDER_ITEM_QUANTITY);
   });
 
-  it("validates Bangladesh mobile numbers and rejects malformed phone inputs", () => {
+  it("validates strict Bangladesh mobile numbers and rejects names or malformed phone inputs", () => {
     assert.equal(isValidPhoneNumber("01856682104"), true);
     assert.equal(isValidPhoneNumber("01712-345678"), true);
     assert.equal(isValidPhoneNumber("+880 1856-682104"), true);
     assert.equal(isValidPhoneNumber("8801912345678"), true);
-    assert.equal(isValidPhoneNumber("+1 (415) 555-0199"), true);
 
     assert.equal(isValidPhoneNumber(""), false);
+    assert.equal(isValidPhoneNumber("John Doe"), false);
     assert.equal(isValidPhoneNumber("abc12345678"), false);
+    assert.equal(isValidPhoneNumber("+1 (415) 555-0199"), false);
     assert.equal(isValidPhoneNumber("12345"), false);
     assert.equal(isValidPhoneNumber("01012345678"), false);
     assert.equal(isValidPhoneNumber("0185668210"), false);

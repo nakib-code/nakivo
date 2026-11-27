@@ -16,9 +16,24 @@ import {
   isValidPhoneNumber,
   MAX_ORDER_DISTINCT_ITEMS,
   MAX_ORDER_ITEM_QUANTITY,
+  normalizePhoneNumber,
 } from "@/lib/order-validation";
+import {
+  evaluateOrderAbuseLimits,
+  ORDER_ABUSE_WINDOW_MS,
+  shouldRequireEmailOtp,
+} from "@/lib/order-abuse";
+import {
+  buildPhoneRiskSummary,
+  type PhoneOrderHistoryCounts,
+} from "@/lib/customer-risk";
+import {
+  ORDER_OTP_MAX_ATTEMPTS,
+  verifyOtpHash,
+} from "@/lib/otp";
 import { normalizeProductPlacement } from "@/lib/product-placement";
 import { getCurrentUser } from "@/lib/auth";
+import { isStaffRole } from "@/lib/roles";
 import {
   OrderServiceError,
   runWithTransactionOrFallback,
@@ -35,9 +50,12 @@ import {
 
 import Category from "@/models/Category";
 import Order from "@/models/Order";
+import OrderOtp from "@/models/OrderOtp";
 import Product from "@/models/Product";
 import StoreSettings from "@/models/StoreSettings";
 import User from "@/models/User";
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 // ==================================================
 // TYPES
@@ -54,6 +72,7 @@ interface ComboBundleInput {
 }
 
 interface ShippingAddressInput {
+  name?: string;
   address: string;
   city: string;
   phone: string;
@@ -85,12 +104,8 @@ function errorResponse(message: string, status = 400) {
 
 export async function POST(req: NextRequest) {
   try {
-    // Authentication
-    const user = await getCurrentUser();
-
-    if (!user) {
-      return errorResponse("Authentication required.", 401);
-    }
+    // Optional authentication — guests can place orders without signing in
+    const user = await getCurrentUser().catch(() => null);
 
     await connectDB();
 
@@ -101,6 +116,9 @@ export async function POST(req: NextRequest) {
       shippingAddress?: ShippingAddressInput;
       paymentMethod?: string;
       idempotencyKey?: unknown;
+      website?: unknown;
+      email?: unknown;
+      otpCode?: unknown;
     };
 
     try {
@@ -112,6 +130,28 @@ export async function POST(req: NextRequest) {
     if (!body || typeof body !== "object") {
       return errorResponse("Invalid request body.");
     }
+
+    // Invisible honeypot check — bots filling the hidden "website" field are safely rejected
+    if (typeof body.website === "string" && body.website.trim().length > 0) {
+      return errorResponse("Unable to process order request.", 400);
+    }
+
+    let providedEmail = "";
+    if (body.email !== undefined && body.email !== null) {
+      if (typeof body.email !== "string") {
+        return errorResponse("Please provide a valid email address.");
+      }
+      const trimmedEmail = body.email.trim().toLowerCase();
+      if (trimmedEmail.length > 0) {
+        if (trimmedEmail.length > 254 || !EMAIL_REGEX.test(trimmedEmail)) {
+          return errorResponse("Please provide a valid email address.");
+        }
+        providedEmail = trimmedEmail;
+      }
+    }
+
+    const providedOtpCode =
+      typeof body.otpCode === "string" ? body.otpCode.trim() : "";
 
     const { items, comboBundles, shippingAddress } = body;
 
@@ -132,22 +172,29 @@ export async function POST(req: NextRequest) {
     }
 
     if (idempotencyKey) {
-      const existingOrder = await Order.findOne({
-        user: user.id,
-        idempotencyKey,
-      });
+      const existingOrder = await Order.findOne({ idempotencyKey });
 
       if (existingOrder) {
-        const existingOrderId = existingOrder._id.toString();
-        return NextResponse.json(
-          {
-            success: true,
-            message: "Order already created.",
-            data: existingOrder,
-            trackingEventId: generatePurchaseEventId(existingOrderId),
-          },
-          { status: 200 }
-        );
+        const existingUserId = existingOrder.user
+          ? existingOrder.user.toString()
+          : null;
+        const currentUserId = user?.id ?? null;
+
+        // Only return the existing order if owned by the same user or both are guest
+        if (existingUserId === currentUserId) {
+          const existingOrderId = existingOrder._id.toString();
+          return NextResponse.json(
+            {
+              success: true,
+              message: "Order already created.",
+              data: existingOrder,
+              trackingEventId: generatePurchaseEventId(existingOrderId),
+            },
+            { status: 200 }
+          );
+        }
+
+        return errorResponse("Duplicate order request.", 409);
       }
     }
 
@@ -193,6 +240,10 @@ export async function POST(req: NextRequest) {
       return errorResponse("Valid shipping information is required.");
     }
 
+    const customerName =
+      typeof shippingAddress.name === "string"
+        ? shippingAddress.name.trim().slice(0, 100)
+        : user?.name?.trim().slice(0, 100) || "";
     const address = shippingAddress.address.trim();
     const city = shippingAddress.city.trim();
     const phone = shippingAddress.phone.trim();
@@ -208,9 +259,11 @@ export async function POST(req: NextRequest) {
 
     if (!isValidPhoneNumber(phone)) {
       return errorResponse(
-        "Please provide a valid phone number (e.g., 01XXXXXXXXX)."
+        "Please provide a valid Bangladesh mobile number (e.g., 017XXXXXXXX or +88017XXXXXXXX)."
       );
     }
+
+    const normalizedPhone = normalizePhoneNumber(phone);
 
     if (
       deliveryArea !== "INSIDE_DHAKA" &&
@@ -325,6 +378,160 @@ export async function POST(req: NextRequest) {
         "Too many different products in one order."
       );
     }
+
+    // Anti-spam / repeat-order throttling (rolling 24-hour window by phone + product & IP)
+    const reqContextForOrder = extractRequestMetaContext(req);
+    const clientIp = reqContextForOrder.clientIpAddress?.slice(0, 64) || "";
+    const since24h = new Date(Date.now() - ORDER_ABUSE_WINDOW_MS);
+
+    const [recentPhoneOrders, recentIpOrderCount, recentIpPendingCount] =
+      await Promise.all([
+        Order.find({
+          normalizedPhone,
+          status: { $ne: "Cancelled" },
+          createdAt: { $gte: since24h },
+        })
+          .select("status orderItems.product")
+          .lean(),
+        clientIp
+          ? Order.countDocuments({
+              clientIp,
+              status: { $ne: "Cancelled" },
+              createdAt: { $gte: since24h },
+            })
+          : Promise.resolve(0),
+        clientIp
+          ? Order.countDocuments({
+              clientIp,
+              status: "Pending",
+              createdAt: { $gte: since24h },
+            })
+          : Promise.resolve(0),
+      ]);
+
+    const abuseCheck = evaluateOrderAbuseLimits({
+      recentPhoneOrders,
+      recentIpOrderCount,
+      requestedProductIds: Array.from(totalQuantities.keys()),
+    });
+
+    if (abuseCheck.blocked) {
+      return errorResponse(
+        abuseCheck.message ||
+          "Too many repeat orders detected. Please contact support for assistance.",
+        429
+      );
+    }
+
+    // Dynamic Email + 6-digit OTP verification on suspicious repeat/burst orders
+    const requiresEmailOtp = shouldRequireEmailOtp({
+      recentPhoneOrders,
+      recentIpOrderCount,
+      recentIpPendingCount,
+    });
+
+    if (requiresEmailOtp) {
+      if (!providedEmail || !providedOtpCode) {
+        return NextResponse.json(
+          {
+            success: false,
+            requiresEmailOtp: true,
+            message:
+              "Email verification is required for repeat orders. Please enter your email and 6-digit verification code.",
+          },
+          { status: 428 }
+        );
+      }
+
+      if (!/^\d{6}$/.test(providedOtpCode)) {
+        return NextResponse.json(
+          {
+            success: false,
+            requiresEmailOtp: true,
+            message: "Please enter a valid 6-digit verification code.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const activeOtp = await OrderOtp.findOne({
+        normalizedPhone,
+        email: providedEmail,
+        used: false,
+        expiresAt: { $gt: new Date() },
+      }).sort({ createdAt: -1 });
+
+      if (!activeOtp) {
+        return NextResponse.json(
+          {
+            success: false,
+            requiresEmailOtp: true,
+            message:
+              "Verification code expired or not found. Please request a new 6-digit code.",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (activeOtp.attempts >= ORDER_OTP_MAX_ATTEMPTS) {
+        await OrderOtp.updateOne(
+          { _id: activeOtp._id },
+          { $set: { used: true } }
+        );
+        return NextResponse.json(
+          {
+            success: false,
+            requiresEmailOtp: true,
+            message:
+              "Too many failed verification attempts. Please request a new 6-digit code.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const isValidOtp = verifyOtpHash(
+        normalizedPhone,
+        providedEmail,
+        providedOtpCode,
+        activeOtp.codeHash
+      );
+
+      if (!isValidOtp) {
+        await OrderOtp.updateOne(
+          { _id: activeOtp._id },
+          { $inc: { attempts: 1 } }
+        );
+        return NextResponse.json(
+          {
+            success: false,
+            requiresEmailOtp: true,
+            message:
+              "Invalid 6-digit verification code. Please check your email and try again.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const consumedOtp = await OrderOtp.findOneAndUpdate(
+        { _id: activeOtp._id, used: false },
+        { $set: { used: true } }
+      );
+
+      if (!consumedOtp) {
+        return NextResponse.json(
+          {
+            success: false,
+            requiresEmailOtp: true,
+            message:
+              "This verification code has already been used. Please request a new code.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    const finalCustomerEmail =
+      providedEmail || user?.email?.trim().toLowerCase() || "";
 
     // Read delivery settings from the database with safe fallback defaults.
     // Never trust delivery charges sent from the client.
@@ -474,75 +681,38 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Atomically decrease stock per distinct product using merged quantities.
-      // In non-transactional fallback mode, compensate already-deducted items on failure.
-      const deductedItems: Array<{ product: unknown; quantity: number }> = [];
+      // Stock Safety: Do NOT deduct Product.stock while the order is Pending.
+      // Stock availability is verified above so out-of-stock products cannot be ordered,
+      // and stock is atomically deducted once when staff transitions the order to Processing/Delivered.
+      const orderPayload = {
+        ...(user?.id ? { user: user.id } : {}),
+        orderItems,
+        shippingAddress: {
+          ...(customerName ? { name: customerName } : {}),
+          address,
+          city,
+          phone: normalizedPhone,
+          deliveryArea,
+        },
+        paymentMethod: "COD" as const,
+        subtotal,
+        deliveryCharge,
+        totalPrice,
+        isPaid: false,
+        stockDeducted: false,
+        normalizedPhone,
+        ...(finalCustomerEmail ? { customerEmail: finalCustomerEmail } : {}),
+        ...(clientIp ? { clientIp } : {}),
+        ...(idempotencyKey ? { idempotencyKey } : {}),
+        status: "Pending" as const,
+      };
 
-      try {
-        for (const [productId, totalQty] of totalQuantities.entries()) {
-          const product = productMap.get(productId)!;
-          const result = await Product.updateOne(
-            {
-              _id: product._id,
-              stock: { $gte: totalQty },
-            },
-            {
-              $inc: { stock: -totalQty },
-            },
-            session ? { session } : undefined
-          );
-
-          if (result.modifiedCount !== 1) {
-            throw new OrderServiceError(
-              "Product stock changed during checkout. Please try again.",
-              409
-            );
-          }
-
-          deductedItems.push({
-            product: product._id,
-            quantity: totalQty,
-          });
-        }
-
-        const orderPayload = {
-          user: user.id,
-          orderItems,
-          shippingAddress: {
-            address,
-            city,
-            phone,
-            deliveryArea,
-          },
-          paymentMethod: "COD" as const,
-          subtotal,
-          deliveryCharge,
-          totalPrice,
-          isPaid: false,
-          ...(idempotencyKey ? { idempotencyKey } : {}),
-          status: "Pending" as const,
-        };
-
-        if (session) {
-          const [order] = await Order.create([orderPayload], { session });
-          return order;
-        }
-
-        return await Order.create(orderPayload);
-      } catch (err) {
-        if (!session && deductedItems.length > 0) {
-          await Promise.allSettled(
-            deductedItems.map((deducted) =>
-              Product.updateOne(
-                { _id: deducted.product },
-                { $inc: { stock: deducted.quantity } }
-              )
-            )
-          );
-        }
-
-        throw err;
+      if (session) {
+        const [order] = await Order.create([orderPayload], { session });
+        return order;
       }
+
+      return await Order.create(orderPayload);
     };
 
     let createdOrder;
@@ -559,22 +729,26 @@ export async function POST(req: NextRequest) {
         "code" in createErr &&
         (createErr as { code?: unknown }).code === 11000
       ) {
-        const existingOrder = await Order.findOne({
-          user: user.id,
-          idempotencyKey,
-        });
+        const existingOrder = await Order.findOne({ idempotencyKey });
 
         if (existingOrder) {
-          const existingOrderId = existingOrder._id.toString();
-          return NextResponse.json(
-            {
-              success: true,
-              message: "Order already created.",
-              data: existingOrder,
-              trackingEventId: generatePurchaseEventId(existingOrderId),
-            },
-            { status: 200 }
-          );
+          const existingUserId = existingOrder.user
+            ? existingOrder.user.toString()
+            : null;
+          const currentUserId = user?.id ?? null;
+
+          if (existingUserId === currentUserId) {
+            const existingOrderId = existingOrder._id.toString();
+            return NextResponse.json(
+              {
+                success: true,
+                message: "Order already created.",
+                data: existingOrder,
+                trackingEventId: generatePurchaseEventId(existingOrderId),
+              },
+              { status: 200 }
+            );
+          }
         }
       }
 
@@ -651,11 +825,11 @@ export async function POST(req: NextRequest) {
             quantity: item.quantity,
           })),
           user: {
-            email: user.email || undefined,
-            phone,
+            email: finalCustomerEmail || user?.email || undefined,
+            phone: normalizedPhone,
             city,
             country: "bd",
-            externalId: user.id,
+            externalId: user?.id || undefined,
             clientIpAddress: reqContext.clientIpAddress,
             clientUserAgent: reqContext.clientUserAgent,
             fbp: reqContext.fbp,
@@ -724,11 +898,11 @@ export async function GET(req: NextRequest) {
         : 50;
     const skip = (page - 1) * limit;
 
-    const isAdmin = user.role?.toLowerCase() === "admin";
+    const isStaff = isStaffRole(user.role);
     const statusParam = searchParams.get("status")?.trim();
     const searchParam = searchParams.get("search")?.trim();
 
-    const baseQuery: Record<string, unknown> = isAdmin ? {} : { user: user.id };
+    const baseQuery: Record<string, unknown> = isStaff ? {} : { user: user.id };
     const query: Record<string, unknown> = { ...baseQuery };
 
     if (
@@ -743,13 +917,14 @@ export async function GET(req: NextRequest) {
       const escaped = searchParam.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const orConditions: Record<string, unknown>[] = [
         { "shippingAddress.phone": { $regex: escaped, $options: "i" } },
+        { "shippingAddress.name": { $regex: escaped, $options: "i" } },
       ];
 
       if (isValidObjectId(searchParam)) {
         orConditions.push({ _id: searchParam });
       }
 
-      if (isAdmin) {
+      if (isStaff) {
         const matchingUsers = await User.find({
           $or: [
             { name: { $regex: escaped, $options: "i" } },
@@ -788,12 +963,113 @@ export async function GET(req: NextRequest) {
         Order.countDocuments({ ...baseQuery, status: "Delivered" }),
       ]);
 
+    let enrichedOrders: unknown[] = orders;
+
+    if (isStaff && orders.length > 0) {
+      const normalizedPhonesSet = new Set<string>();
+      const rawPhoneVariantsSet = new Set<string>();
+
+      for (const order of orders) {
+        const norm =
+          order.normalizedPhone ||
+          (order.shippingAddress?.phone
+            ? normalizePhoneNumber(order.shippingAddress.phone)
+            : "");
+        if (norm) {
+          normalizedPhonesSet.add(norm);
+          rawPhoneVariantsSet.add(norm);
+          if (norm.startsWith("01")) {
+            rawPhoneVariantsSet.add(`+88${norm}`);
+            rawPhoneVariantsSet.add(`88${norm}`);
+          }
+        }
+        if (order.shippingAddress?.phone) {
+          rawPhoneVariantsSet.add(order.shippingAddress.phone);
+        }
+      }
+
+      const normalizedPhones = Array.from(normalizedPhonesSet);
+      const rawPhoneVariants = Array.from(rawPhoneVariantsSet);
+
+      if (normalizedPhones.length > 0) {
+        const phoneAgg = await Order.aggregate<{
+          _id: string;
+          totalOrders: number;
+          deliveredCount: number;
+          cancelledCount: number;
+          pendingCount: number;
+        }>([
+          {
+            $match: {
+              $or: [
+                { normalizedPhone: { $in: normalizedPhones } },
+                { "shippingAddress.phone": { $in: rawPhoneVariants } },
+              ],
+            },
+          },
+          {
+            $group: {
+              _id: {
+                $ifNull: ["$normalizedPhone", "$shippingAddress.phone"],
+              },
+              totalOrders: { $sum: 1 },
+              deliveredCount: {
+                $sum: { $cond: [{ $eq: ["$status", "Delivered"] }, 1, 0] },
+              },
+              cancelledCount: {
+                $sum: { $cond: [{ $eq: ["$status", "Cancelled"] }, 1, 0] },
+              },
+              pendingCount: {
+                $sum: { $cond: [{ $eq: ["$status", "Pending"] }, 1, 0] },
+              },
+            },
+          },
+        ]);
+
+        const countsByPhone = new Map<string, PhoneOrderHistoryCounts>();
+
+        for (const row of phoneAgg) {
+          if (!row._id) continue;
+          const normKey = normalizePhoneNumber(String(row._id));
+          const existing = countsByPhone.get(normKey) ?? {
+            totalOrders: 0,
+            deliveredCount: 0,
+            cancelledCount: 0,
+            pendingCount: 0,
+          };
+
+          countsByPhone.set(normKey, {
+            totalOrders: existing.totalOrders + row.totalOrders,
+            deliveredCount: existing.deliveredCount + row.deliveredCount,
+            cancelledCount: existing.cancelledCount + row.cancelledCount,
+            pendingCount: existing.pendingCount + row.pendingCount,
+          });
+        }
+
+        enrichedOrders = orders.map((order) => {
+          const norm =
+            order.normalizedPhone ||
+            (order.shippingAddress?.phone
+              ? normalizePhoneNumber(order.shippingAddress.phone)
+              : "");
+          const counts = norm ? countsByPhone.get(norm) : undefined;
+
+          return {
+            ...order,
+            ...(norm && counts
+              ? { phoneRisk: buildPhoneRiskSummary(norm, counts) }
+              : {}),
+          };
+        });
+      }
+    }
+
     const totalPages = Math.max(1, Math.ceil(total / limit));
 
     return NextResponse.json(
       {
         success: true,
-        data: orders,
+        data: enrichedOrders,
         stats: {
           totalOrders: totalAll,
           pendingOrders,

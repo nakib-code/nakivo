@@ -1,13 +1,13 @@
 import mongoose, { Model, Schema } from "mongoose";
-import { IOrder } from "@/types";
+import type { IOrder } from "@/types";
 
 const OrderSchema: Schema<IOrder> = new Schema(
   {
-    // Customer
+    // Customer (optional to support guest checkout)
     user: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: false,
       index: true,
     },
 
@@ -43,6 +43,12 @@ const OrderSchema: Schema<IOrder> = new Schema(
 
     // Shipping Address
     shippingAddress: {
+      name: {
+        type: String,
+        required: false,
+        trim: true,
+        maxlength: 100,
+      },
       address: {
         type: String,
         required: true,
@@ -99,6 +105,36 @@ const OrderSchema: Schema<IOrder> = new Schema(
       default: false,
     },
 
+    // Tracks whether inventory has been deducted for this order.
+    // New Pending orders start with stockDeducted: false so fake COD orders do not lock inventory.
+    stockDeducted: {
+      type: Boolean,
+      required: true,
+      default: false,
+    },
+
+    // Optional customer email (collected when OTP verification is triggered or supplied)
+    customerEmail: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      maxlength: 254,
+    },
+
+    // Normalized phone & IP for anti-spam repeat-order throttling
+    normalizedPhone: {
+      type: String,
+      trim: true,
+      maxlength: 20,
+      index: true,
+    },
+
+    clientIp: {
+      type: String,
+      trim: true,
+      maxlength: 64,
+    },
+
     // Optional client-generated idempotency key to prevent duplicate submissions
     idempotencyKey: {
       type: String,
@@ -125,7 +161,9 @@ const OrderSchema: Schema<IOrder> = new Schema(
 );
 
 OrderSchema.index({ user: 1, createdAt: -1 });
-OrderSchema.index({ user: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
+OrderSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
+OrderSchema.index({ normalizedPhone: 1, createdAt: -1 });
+OrderSchema.index({ clientIp: 1, createdAt: -1 });
 OrderSchema.index({ status: 1, createdAt: -1 });
 OrderSchema.index({ isPaid: 1, createdAt: -1 });
 

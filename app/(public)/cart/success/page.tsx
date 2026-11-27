@@ -3,6 +3,7 @@ import { CheckCircle2, ShoppingBag } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
+import { isStaffRole } from "@/lib/roles";
 
 interface SuccessPageProps {
   searchParams: Promise<{
@@ -18,7 +19,8 @@ export default async function SuccessPage({
     searchParams,
     getCurrentUser(),
   ]);
-  const ordersHref = user?.role === "admin" ? "/admin/orders" : "/user/orders";
+  const isStaff = isStaffRole(user?.role);
+  const ordersHref = isStaff ? "/admin/orders" : "/user/orders";
 
   return (
     <div className="flex min-h-[70vh] items-center justify-center px-4">
@@ -57,18 +59,31 @@ export default async function SuccessPage({
         {/* Actions */}
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
-          <Button asChild>
-            <Link href={ordersHref}>
-              <ShoppingBag className="mr-2 h-4 w-4" />
-              {user?.role === "admin" ? "View Orders" : "View My Orders"}
-            </Link>
-          </Button>
+          {user ? (
+            <Button asChild>
+              <Link href={ordersHref}>
+                <ShoppingBag className="mr-2 h-4 w-4" />
+                {isStaff ? "View Orders" : "View My Orders"}
+              </Link>
+            </Button>
+          ) : (
+            <Button asChild>
+              <Link href="/products">
+                <ShoppingBag className="mr-2 h-4 w-4" />
+                Continue Shopping
+              </Link>
+            </Button>
+          )}
 
-          <Button variant="outline" asChild>
-            <Link href="/products">
-              Continue Shopping
-            </Link>
-          </Button>
+          {user ? (
+            <Button variant="outline" asChild>
+              <Link href="/products">Continue Shopping</Link>
+            </Button>
+          ) : (
+            <Button variant="outline" asChild>
+              <Link href="/login">Sign In with Google</Link>
+            </Button>
+          )}
         </div>
       </div>
     </div>

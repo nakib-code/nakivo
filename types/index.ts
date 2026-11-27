@@ -12,7 +12,7 @@ export interface IUser extends Document {
 
   image?: string;
 
-  role: "customer" | "admin";
+  role: "user" | "customer" | "manager" | "admin";
 
   status: "active" | "blocked";
 
@@ -82,6 +82,7 @@ export interface IOrderItem {
 }
 
 export interface IShippingAddress {
+  name?: string;
   address: string;
   city: string;
   phone: string;
@@ -90,7 +91,7 @@ export interface IShippingAddress {
 
 export interface IOrder extends Document {
   _id: Types.ObjectId;
-  user: Types.ObjectId | IUser;
+  user?: Types.ObjectId | IUser | null;
   orderItems: IOrderItem[];
   shippingAddress: IShippingAddress;
   paymentMethod: "COD";
@@ -98,6 +99,10 @@ export interface IOrder extends Document {
   deliveryCharge?: number;
   totalPrice: number;
   isPaid: boolean;
+  stockDeducted?: boolean;
+  customerEmail?: string;
+  normalizedPhone?: string;
+  clientIp?: string;
   idempotencyKey?: string;
   status: "Pending" | "Processing" | "Delivered" | "Cancelled";
   createdAt: Date;

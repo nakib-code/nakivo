@@ -16,6 +16,11 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import {
+  ASSIGNABLE_USER_ROLES,
+  getRoleLabel,
+  type AssignableUserRole,
+} from "@/lib/roles";
 
 import {
   usePaginatedUsers,
@@ -48,12 +53,40 @@ export default function AdminUsersPage() {
   };
   const stats = usersResponse?.stats ?? {
     totalUsers: users.length,
-    customers: users.filter((u) => u.role === "customer").length,
+    customers: users.filter((u) => u.role === "user" || u.role === "customer").length,
+    managers: users.filter((u) => u.role === "manager").length,
     admins: users.filter((u) => u.role === "admin").length,
   };
 
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
+
+  const handleRoleChange = (
+    id: string,
+    nextRole: AssignableUserRole,
+    name: string
+  ) => {
+    if (id === currentUserId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Change ${name || "this user"}'s role to ${getRoleLabel(nextRole)}?`
+    );
+
+    if (!confirmed) return;
+
+    setPendingUserId(id);
+    updateUser.mutate(
+      {
+        id,
+        data: { role: nextRole },
+      },
+      {
+        onSettled: () => setPendingUserId(null),
+      }
+    );
+  };
 
   const handleBlock = (id: string, status: string, name: string) => {
     if (id === currentUserId) {
@@ -74,25 +107,6 @@ export default function AdminUsersPage() {
       {
         id,
         data: { status: nextStatus },
-      },
-      {
-        onSettled: () => setPendingUserId(null),
-      }
-    );
-  };
-
-  const handleMakeAdmin = (id: string, name: string) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to promote ${name || "this user"} to Admin?`
-    );
-
-    if (!confirmed) return;
-
-    setPendingUserId(id);
-    updateUser.mutate(
-      {
-        id,
-        data: { role: "admin" },
       },
       {
         onSettled: () => setPendingUserId(null),
@@ -213,7 +227,8 @@ export default function AdminUsersPage() {
       <div className="
         grid
         gap-4
-        sm:grid-cols-3
+        sm:grid-cols-2
+        lg:grid-cols-4
       ">
 
 
@@ -253,7 +268,7 @@ export default function AdminUsersPage() {
         ">
 
           <p className="text-sm text-slate-500">
-            Customers
+            Users
           </p>
 
 
@@ -263,6 +278,33 @@ export default function AdminUsersPage() {
             font-bold
           ">
             {stats.customers}
+          </p>
+
+        </div>
+
+
+
+
+
+
+        <div className="
+          rounded-xl
+          border
+          bg-white
+          p-5
+        ">
+
+          <p className="text-sm text-slate-500">
+            Managers
+          </p>
+
+
+          <p className="
+            mt-1
+            text-2xl
+            font-bold
+          ">
+            {stats.managers}
           </p>
 
         </div>
@@ -510,39 +552,19 @@ export default function AdminUsersPage() {
                   {/* Role */}
 
                   <td className="px-5 py-4">
-
-
-                  {
-                    user.role === "admin"
-
-                    ?
-
-                    <Badge>
-
-                      <ShieldCheck
-                        className="
-                          mr-1
-                          h-3
-                          w-3
-                        "
-                      />
-
-                      Admin
-
-                    </Badge>
-
-
-                    :
-
-                    <Badge variant="secondary">
-
-                      Customer
-
-                    </Badge>
-
-                  }
-
-
+                    {user.role === "admin" ? (
+                      <Badge>
+                        <ShieldCheck className="mr-1 h-3 w-3" />
+                        Admin
+                      </Badge>
+                    ) : user.role === "manager" ? (
+                      <Badge className="bg-blue-600 text-white hover:bg-blue-700">
+                        <ShieldCheck className="mr-1 h-3 w-3" />
+                        Manager
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary">User</Badge>
+                    )}
                   </td>
 
 
@@ -614,7 +636,29 @@ export default function AdminUsersPage() {
                   {/* Actions */}
 
                   <td className="px-5 py-4">
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={
+                          user.role === "customer" ? "user" : user.role
+                        }
+                        disabled={isSelf || isRowPending}
+                        aria-label={`Role for ${user.name}`}
+                        onChange={(event) =>
+                          handleRoleChange(
+                            userId,
+                            event.target.value as AssignableUserRole,
+                            user.name
+                          )
+                        }
+                        className="h-9 rounded-lg border bg-white px-2 text-xs font-medium outline-none focus:ring-2 focus:ring-black/15 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {ASSIGNABLE_USER_ROLES.map((roleOption) => (
+                          <option key={roleOption} value={roleOption}>
+                            {getRoleLabel(roleOption)}
+                          </option>
+                        ))}
+                      </select>
+
                       <button
                         type="button"
                         disabled={isSelf || isRowPending}
@@ -641,19 +685,6 @@ export default function AdminUsersPage() {
                           <UserX className="h-4 w-4" />
                         )}
                       </button>
-
-                      {user.role !== "admin" && (
-                        <button
-                          type="button"
-                          disabled={isRowPending}
-                          title="Promote to Admin"
-                          aria-label={`Promote ${user.name} to admin`}
-                          onClick={() => handleMakeAdmin(userId, user.name)}
-                          className="rounded-lg border p-2 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          <ShieldCheck className="h-4 w-4" />
-                        </button>
-                      )}
 
                       <button
                         type="button"

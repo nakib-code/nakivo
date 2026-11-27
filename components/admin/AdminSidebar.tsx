@@ -14,48 +14,58 @@ import {
   Store,
   LogOut,
 } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
+
+import { isAdminRole } from "@/lib/roles";
 
 const menuItems = [
   {
     label: "Dashboard",
     href: "/admin",
     icon: LayoutDashboard,
+    adminOnly: false,
   },
   {
     label: "Products",
     href: "/admin/products",
     icon: Package,
+    adminOnly: false,
   },
   {
     label: "Categories",
     href: "/admin/categories",
     icon: Tags,
+    adminOnly: false,
   },
   {
     label: "Orders",
     href: "/admin/orders",
     icon: ShoppingCart,
+    adminOnly: false,
   },
   {
     label: "Users",
     href: "/admin/users",
     icon: Users,
+    adminOnly: true,
   },
   {
     label: "Hero",
     href: "/admin/hero",
     icon: ImageIcon,
+    adminOnly: false,
   },
   {
     label: "Marketing & Analytics",
     href: "/admin/marketing",
     icon: BarChart3,
+    adminOnly: true,
   },
   {
     label: "Settings",
     href: "/admin/settings",
     icon: Settings,
+    adminOnly: true,
   },
 ];
 
@@ -69,6 +79,12 @@ export default function AdminSidebar({
   mobile = false,
 }: AdminSidebarProps) {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const isAdmin = isAdminRole(session?.user?.role);
+
+  const visibleMenuItems = menuItems.filter(
+    (item) => !item.adminOnly || isAdmin
+  );
 
   return (
     <aside
@@ -91,7 +107,7 @@ export default function AdminSidebar({
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-        {menuItems.map((item) => {
+        {visibleMenuItems.map((item) => {
           const Icon = item.icon;
 
           const isActive =

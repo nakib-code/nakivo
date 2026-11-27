@@ -12,6 +12,7 @@ export interface UsersPaginationMeta {
 export interface UsersStatsMeta {
   totalUsers: number;
   customers: number;
+  managers: number;
   admins: number;
 }
 
@@ -68,7 +69,8 @@ export async function getUsersPaginated(
     },
     stats: json.stats ?? {
       totalUsers: data.length,
-      customers: data.filter((u) => u.role === "customer").length,
+      customers: data.filter((u) => u.role === "user" || u.role === "customer").length,
+      managers: data.filter((u) => u.role === "manager").length,
       admins: data.filter((u) => u.role === "admin").length,
     },
   };

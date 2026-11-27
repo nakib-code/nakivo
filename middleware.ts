@@ -1,6 +1,12 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
+import {
+  isAdminOnlyDashboardPath,
+  isAdminRole,
+  isStaffRole,
+} from "@/lib/roles";
+
 export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token;
@@ -8,7 +14,7 @@ export default withAuth(
     const isBlocked = token?.status === "blocked";
     const isAuthenticated = Boolean(token && !isBlocked);
 
-    // Admin routes
+    // Admin & Manager dashboard routes
     if (pathname.startsWith("/admin")) {
       if (!isAuthenticated) {
         const loginUrl = new URL("/login", req.url);
@@ -18,8 +24,13 @@ export default withAuth(
         return NextResponse.redirect(loginUrl);
       }
 
-      if (token?.role !== "admin") {
+      if (!isStaffRole(token?.role)) {
         return NextResponse.redirect(new URL("/user", req.url));
+      }
+
+      // Restrict sensitive admin-only sections from managers
+      if (isAdminOnlyDashboardPath(pathname) && !isAdminRole(token?.role)) {
+        return NextResponse.redirect(new URL("/admin", req.url));
       }
     }
 
@@ -33,8 +44,8 @@ export default withAuth(
         return NextResponse.redirect(loginUrl);
       }
 
-      // Admin users should use the admin dashboard
-      if (token?.role === "admin") {
+      // Staff (admin/manager) should use the staff dashboard
+      if (isStaffRole(token?.role)) {
         return NextResponse.redirect(new URL("/admin", req.url));
       }
     }
@@ -45,7 +56,7 @@ export default withAuth(
         pathname.startsWith("/register")) &&
       isAuthenticated
     ) {
-      if (token?.role === "admin") {
+      if (isStaffRole(token?.role)) {
         return NextResponse.redirect(new URL("/admin", req.url));
       }
 

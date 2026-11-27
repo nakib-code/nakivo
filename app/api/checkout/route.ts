@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check order ownership
-    if (order.user.toString() !== user.id.toString()) {
+    if (!order.user || order.user.toString() !== user.id.toString()) {
       return NextResponse.json(
         {
           success: false,

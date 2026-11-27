@@ -1,7 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { requireStaff } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import ContactMessage from "@/models/ContactMessage";
+
+export async function GET(req: NextRequest) {
+  try {
+    const auth = await requireStaff();
+
+    if (!auth.authorized) {
+      return NextResponse.json(
+        { success: false, message: auth.message },
+        { status: auth.status }
+      );
+    }
+
+    await connectDB();
+
+    const { searchParams } = new URL(req.url);
+    const parsedPage = Number(searchParams.get("page"));
+    const page =
+      Number.isFinite(parsedPage) && parsedPage >= 1
+        ? Math.floor(parsedPage)
+        : 1;
+    const parsedLimit = Number(searchParams.get("limit"));
+    const limit =
+      Number.isFinite(parsedLimit) && parsedLimit >= 1
+        ? Math.min(Math.floor(parsedLimit), 100)
+        : 25;
+    const skip = (page - 1) * limit;
+
+    const [total, messages] = await Promise.all([
+      ContactMessage.countDocuments(),
+      ContactMessage.find()
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: messages,
+        pagination: {
+          currentPage: page,
+          limit,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / limit)),
+        },
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("GET Contact Messages Error:", error);
+
+    return NextResponse.json(
+      { success: false, message: "Failed to load contact messages" },
+      { status: 500 }
+    );
+  }
+}
 
 const CONTACT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const CONTACT_MAX_REQUESTS = 5;

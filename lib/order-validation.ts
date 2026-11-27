@@ -6,6 +6,8 @@
 export const MAX_ORDER_ITEM_QUANTITY = 100;
 export const MAX_ORDER_DISTINCT_ITEMS = 100;
 
+const STRICT_BD_MOBILE_REGEX = /^(?:\+?88)?01[3-9]\d{8}$/;
+
 /**
  * Returns the maximum selectable quantity for a single product in an order,
  * bounded by both available stock and the server per-item cap (100).
@@ -19,42 +21,47 @@ export function getMaxOrderableQuantity(stock: number): number {
 }
 
 /**
- * Validates a shipping phone number.
- * - Allows digits, spaces, hyphens, parentheses, and an optional leading `+`.
- * - Enforces valid Bangladesh mobile format (`01[3-9]XXXXXXXX`, with optional `880`/`+880` prefix)
- *   when the input uses a BD prefix, or 10–15 digits for other international numbers.
+ * Normalizes a valid Bangladesh mobile number into canonical 11-digit local format
+ * (`01XXXXXXXXX`) after stripping spaces, hyphens, and parentheses.
+ * Returns an empty string if the input is not a valid Bangladesh mobile number.
  */
-export function isValidPhoneNumber(raw: string): boolean {
-  const trimmed = raw.trim();
+export function normalizePhoneNumber(raw: string): string {
+  if (typeof raw !== "string") {
+    return "";
+  }
 
+  const trimmed = raw.trim();
   if (!trimmed || trimmed.length > 30) {
-    return false;
+    return "";
   }
 
   // Only allow optional leading +, digits, spaces, hyphens, and parentheses
   if (!/^\+?[\d\s()-]+$/.test(trimmed)) {
-    return false;
+    return "";
   }
 
-  const normalized = trimmed.replace(/[\s()-]/g, "");
+  const compact = trimmed.replace(/[\s()-]/g, "");
 
-  // Reject multiple '+' signs or '+' not at the start
-  if (!/^\+?\d+$/.test(normalized)) {
-    return false;
+  if (!STRICT_BD_MOBILE_REGEX.test(compact)) {
+    return "";
   }
 
-  // Bangladesh numbers: enforce valid operator prefix (013-019) and 11-digit local length
-  if (
-    normalized.startsWith("01") ||
-    normalized.startsWith("880") ||
-    normalized.startsWith("+880")
-  ) {
-    return /^(?:\+?880|0)1[3-9]\d{8}$/.test(normalized);
+  if (compact.startsWith("+88")) {
+    return compact.slice(3);
   }
 
-  const digitsOnly = normalized.startsWith("+")
-    ? normalized.slice(1)
-    : normalized;
+  if (compact.startsWith("88")) {
+    return compact.slice(2);
+  }
 
-  return digitsOnly.length >= 10 && digitsOnly.length <= 15;
+  return compact;
+}
+
+/**
+ * Strictly validates a shipping phone number against Bangladesh mobile format:
+ * `^(\+?88)?01[3-9]\d{8}$` after removing spaces, dashes, and parentheses.
+ * Rejects names, arbitrary text, and malformed numbers.
+ */
+export function isValidPhoneNumber(raw: string): boolean {
+  return normalizePhoneNumber(raw).length === 11;
 }

@@ -44,19 +44,21 @@ export async function GET(req: NextRequest) {
         : 50;
     const skip = (page - 1) * limit;
 
-    const [total, users, customerCount, adminCount] = await Promise.all([
-      User.countDocuments(),
-      User.find()
-        .select("-password")
-        .sort({
-          createdAt: -1,
-        })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      User.countDocuments({ role: "customer" }),
-      User.countDocuments({ role: "admin" }),
-    ]);
+    const [total, users, customerCount, managerCount, adminCount] =
+      await Promise.all([
+        User.countDocuments(),
+        User.find()
+          .select("-password")
+          .sort({
+            createdAt: -1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        User.countDocuments({ role: { $in: ["user", "customer"] } }),
+        User.countDocuments({ role: "manager" }),
+        User.countDocuments({ role: "admin" }),
+      ]);
 
     const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -67,6 +69,7 @@ export async function GET(req: NextRequest) {
         stats: {
           totalUsers: total,
           customers: customerCount,
+          managers: managerCount,
           admins: adminCount,
         },
         pagination: {

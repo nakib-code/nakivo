@@ -18,10 +18,17 @@ import {
   Clock3,
   XCircle,
   RefreshCw,
+  ShieldCheck,
+  ShieldAlert,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { formatBDT } from "@/lib/currency";
+import type {
+  CustomerRiskBadgeType,
+  PhoneRiskSummary,
+} from "@/lib/customer-risk";
 import {
   usePaginatedOrders,
   useUpdateOrderStatus,
@@ -58,6 +65,7 @@ type Order = {
     email?: string;
   };
   shippingAddress?: {
+    name?: string;
     address?: string;
     city?: string;
     phone?: string;
@@ -83,6 +91,9 @@ type Order = {
   subtotal?: number;
   deliveryCharge?: number;
   totalPrice?: number;
+  stockDeducted?: boolean;
+  customerEmail?: string;
+  phoneRisk?: PhoneRiskSummary;
 };
 
 function formatDate(date: string) {
@@ -137,6 +148,49 @@ function CopyButton({
     >
       <Copy className="h-3.5 w-3.5" />
     </button>
+  );
+}
+
+function PhoneRiskBadges({
+  badges,
+}: {
+  badges?: CustomerRiskBadgeType[];
+}) {
+  if (!badges || badges.length === 0) return null;
+
+  const badgeConfig: Record<
+    CustomerRiskBadgeType,
+    { className: string; icon: React.ReactNode }
+  > = {
+    "Verified Buyer": {
+      className: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+      icon: <ShieldCheck className="h-3 w-3" />,
+    },
+    "High Cancel Risk": {
+      className: "bg-red-50 text-red-700 ring-red-200",
+      icon: <ShieldAlert className="h-3 w-3" />,
+    },
+    "Multiple Pending": {
+      className: "bg-amber-50 text-amber-800 ring-amber-200",
+      icon: <AlertTriangle className="h-3 w-3" />,
+    },
+  };
+
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {badges.map((badge) => {
+        const cfg = badgeConfig[badge];
+        return (
+          <span
+            key={badge}
+            className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${cfg.className}`}
+          >
+            {cfg.icon}
+            {badge}
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
@@ -305,8 +359,8 @@ export default function AdminOrdersPage() {
     const details = [
       `Order ID: ${order._id}`,
       `Date: ${formatDate(order.createdAt)}`,
-      `Customer: ${order.user?.name || "Unknown Customer"}`,
-      `Email: ${order.user?.email || "Not provided"}`,
+      `Customer: ${order.user?.name || order.shippingAddress?.name || "Guest Customer"}`,
+      `Email: ${order.user?.email || "Guest checkout"}`,
       `Phone: ${shipping?.phone || "Not provided"}`,
       `Address: ${shipping?.address || "Not provided"}`,
       `City: ${shipping?.city || "Not provided"}`,
@@ -493,11 +547,17 @@ export default function AdminOrdersPage() {
 
                     <td className="px-5 py-4">
                       <p className="max-w-48 truncate font-medium">
-                        {order.user?.name || "Unknown Customer"}
+                        {order.user?.name ||
+                          order.shippingAddress?.name ||
+                          "Guest Customer"}
                       </p>
-                      <p className="mt-1 max-w-48 truncate text-xs text-muted-foreground">
-                        {order.user?.email || "No email"}
+                      <p className="mt-0.5 max-w-48 truncate text-xs text-muted-foreground">
+                        {order.shippingAddress?.phone ||
+                          order.user?.email ||
+                          order.customerEmail ||
+                          "Guest checkout"}
                       </p>
+                      <PhoneRiskBadges badges={order.phoneRisk?.badges} />
                     </td>
 
                     <td className="whitespace-nowrap px-5 py-4 text-muted-foreground">
@@ -667,11 +727,19 @@ export default function AdminOrdersPage() {
                   <div className="divide-y">
                     <DetailRow
                       label="Customer Name"
-                      value={selectedOrder.user?.name}
+                      value={
+                        selectedOrder.user?.name ||
+                        selectedOrder.shippingAddress?.name ||
+                        "Guest Customer"
+                      }
                     />
                     <DetailRow
                       label="Email Address"
-                      value={selectedOrder.user?.email}
+                      value={
+                        selectedOrder.user?.email ||
+                        selectedOrder.customerEmail ||
+                        "Guest checkout"
+                      }
                     />
                   </div>
                 </div>
@@ -708,6 +776,57 @@ export default function AdminOrdersPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Phone Order History & Customer Risk */}
+              {selectedOrder.phoneRisk && (
+                <div className="rounded-xl border bg-muted/20 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-sm font-semibold">
+                        Phone Order History &amp; Risk
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        Lifetime order history for{" "}
+                        {selectedOrder.phoneRisk.normalizedPhone}
+                      </p>
+                    </div>
+                    <PhoneRiskBadges badges={selectedOrder.phoneRisk.badges} />
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                    <div className="rounded-lg border bg-background px-3 py-2">
+                      <p className="text-[11px] text-muted-foreground">Total</p>
+                      <p className="text-base font-bold tabular-nums">
+                        {selectedOrder.phoneRisk.totalOrders}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border bg-background px-3 py-2">
+                      <p className="text-[11px] text-muted-foreground">
+                        Delivered
+                      </p>
+                      <p className="text-base font-bold tabular-nums text-emerald-700">
+                        {selectedOrder.phoneRisk.deliveredCount}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border bg-background px-3 py-2">
+                      <p className="text-[11px] text-muted-foreground">
+                        Pending
+                      </p>
+                      <p className="text-base font-bold tabular-nums text-amber-700">
+                        {selectedOrder.phoneRisk.pendingCount}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border bg-background px-3 py-2">
+                      <p className="text-[11px] text-muted-foreground">
+                        Cancelled
+                      </p>
+                      <p className="text-base font-bold tabular-nums text-red-700">
+                        {selectedOrder.phoneRisk.cancelledCount}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Order items */}
               <div>

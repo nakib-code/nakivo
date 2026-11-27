@@ -36,6 +36,7 @@ export type DeliveryArea = "INSIDE_DHAKA" | "OUTSIDE_DHAKA";
 // ==================================================
 
 export interface ShippingAddress {
+  name?: string;
   address: string;
   city: string;
   phone: string;
@@ -62,12 +63,17 @@ export type OrderStatus =
 // CREATE ORDER PAYLOAD
 // ==================================================
 
+import type { PhoneRiskSummary } from "@/lib/customer-risk";
+
 export interface CreateOrderPayload {
   items: CreateOrderItem[];
   comboBundles?: CreateComboBundlePayload[];
   shippingAddress: ShippingAddress;
   paymentMethod: PaymentMethod;
   idempotencyKey?: string;
+  email?: string;
+  otpCode?: string;
+  website?: string;
 }
 
 // ==================================================
@@ -95,6 +101,9 @@ export interface Order {
   deliveryCharge?: number;
   totalPrice: number;
   isPaid: boolean;
+  stockDeducted?: boolean;
+  customerEmail?: string;
+  phoneRisk?: PhoneRiskSummary;
   status: OrderStatus;
   createdAt: string;
   updatedAt: string;

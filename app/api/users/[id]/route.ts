@@ -4,11 +4,15 @@ import mongoose from "mongoose";
 import connectDB from "@/lib/db";
 import User from "@/models/User";
 import { requireAdmin } from "@/lib/auth";
+import {
+  ALL_USER_ROLES,
+  canManageUserAccount,
+  type UserRole,
+} from "@/lib/roles";
 
-const ALLOWED_ROLES = ["customer", "admin"] as const;
+const ALLOWED_ROLES = ALL_USER_ROLES;
 const ALLOWED_STATUSES = ["active", "blocked"] as const;
 
-type UserRole = (typeof ALLOWED_ROLES)[number];
 type UserStatus = (typeof ALLOWED_STATUSES)[number];
 
 interface UserUpdatePayload {
@@ -147,25 +151,19 @@ export async function PATCH(
       );
     }
 
-    const isSelf = id === auth.user.id;
+    const permission = canManageUserAccount({
+      actorRole: auth.user.role,
+      actorId: auth.user.id,
+      targetId: id,
+      nextRole: updateData.role,
+      nextStatus: updateData.status,
+    });
 
-    if (isSelf && updateData.role && updateData.role !== "admin") {
+    if (!permission.allowed) {
       return NextResponse.json(
         {
           success: false,
-          message: "You cannot demote your own admin account",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    if (isSelf && updateData.status === "blocked") {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "You cannot block your own account",
+          message: permission.reason || "Action not permitted",
         },
         {
           status: 400,

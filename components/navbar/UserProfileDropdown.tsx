@@ -27,6 +27,8 @@ import {
   User,
 } from "lucide-react";
 
+import { getRoleLabel, isStaffRole } from "@/lib/roles";
+
 export default function UserProfileDropdown() {
   const { data: session, status } = useSession();
 
@@ -37,23 +39,15 @@ export default function UserProfileDropdown() {
     );
   }
 
-  // Guest user: Login and Register buttons
+  // Guest user: Google Sign In button only
   if (!session?.user) {
     return (
       <div className="flex shrink-0 items-center gap-2">
         <Button
           asChild
-          variant="ghost"
-          className="rounded-full px-4"
-        >
-          <Link href="/login">Login</Link>
-        </Button>
-
-        <Button
-          asChild
           className="rounded-full bg-black px-5 text-white hover:bg-slate-800"
         >
-          <Link href="/register">Register</Link>
+          <Link href="/login">Sign In</Link>
         </Button>
       </div>
     );
@@ -62,10 +56,10 @@ export default function UserProfileDropdown() {
   // Authenticated user
   const user = session.user;
   const role = user.role;
-  const isAdmin = role === "admin";
+  const isStaff = isStaffRole(role);
 
-  const dashboardHref = isAdmin ? "/admin" : "/user";
-  const ordersHref = isAdmin
+  const dashboardHref = isStaff ? "/admin" : "/user";
+  const ordersHref = isStaff
     ? "/admin/orders"
     : "/user/orders";
 
@@ -118,10 +112,10 @@ export default function UserProfileDropdown() {
             </div>
 
             <Badge
-              variant={isAdmin ? "default" : "secondary"}
+              variant={isStaff ? "default" : "secondary"}
               className="w-fit text-[10px] uppercase"
             >
-              {role || "customer"}
+              {getRoleLabel(role)}
             </Badge>
           </div>
         </DropdownMenuLabel>
@@ -135,7 +129,11 @@ export default function UserProfileDropdown() {
           >
             <LayoutDashboard className="mr-2 h-4 w-4" />
             <span>
-              {isAdmin ? "Admin Dashboard" : "My Dashboard"}
+              {role === "manager"
+                ? "Manager Dashboard"
+                : isStaff
+                  ? "Admin Dashboard"
+                  : "My Dashboard"}
             </span>
           </Link>
         </DropdownMenuItem>
@@ -147,12 +145,12 @@ export default function UserProfileDropdown() {
           >
             <Package className="mr-2 h-4 w-4" />
             <span>
-              {isAdmin ? "All Orders" : "My Orders"}
+              {isStaff ? "All Orders" : "My Orders"}
             </span>
           </Link>
         </DropdownMenuItem>
 
-        {!isAdmin && (
+        {!isStaff && (
           <DropdownMenuItem asChild>
             <Link
               href="/user/profile"

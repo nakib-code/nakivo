@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isValidObjectId } from "mongoose";
 
 import connectDB from "@/lib/db";
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import Category from "@/models/Category";
 import Product from "@/models/Product";
 import {
@@ -28,7 +28,7 @@ export async function PATCH(
     // Authentication & Admin Check
     // ========================================
 
-    const auth = await requireAdmin();
+    const auth = await requireStaff();
 
     if (!auth.authorized) {
       return NextResponse.json(
@@ -132,7 +132,11 @@ export async function PATCH(
       populateUser: true,
     });
 
-    if (status === "Cancelled" || status === "Delivered") {
+    if (
+      status === "Processing" ||
+      status === "Cancelled" ||
+      status === "Delivered"
+    ) {
       try {
         revalidatePath("/");
         revalidatePath("/products");

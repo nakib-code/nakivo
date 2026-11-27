@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import { deleteFromCloudinary, uploadToCloudinary } from "@/lib/cloudinary";
 
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     // ADMIN AUTH
     // ========================================
 
-    const auth = await requireAdmin();
+    const auth = await requireStaff();
 
     if (!auth.authorized) {
       return NextResponse.json(

@@ -2,7 +2,7 @@ import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { deleteFromCloudinary } from "@/lib/cloudinary";
 import connectDB from "@/lib/db";
 import Category from "@/models/Category";
@@ -93,7 +93,7 @@ export async function PATCH(
 ) {
   try {
     // Admin authorization
-    const auth = await requireAdmin();
+    const auth = await requireStaff();
 
     if (!auth.authorized) {
       return NextResponse.json(
@@ -327,7 +327,7 @@ export async function DELETE(
 ) {
   try {
     // Admin authorization
-    const auth = await requireAdmin();
+    const auth = await requireStaff();
 
     if (!auth.authorized) {
       return NextResponse.json(

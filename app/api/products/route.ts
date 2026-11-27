@@ -2,7 +2,7 @@ import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { isValidObjectId } from "mongoose";
 
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import { isValidProductPlacement } from "@/lib/product-placement";
 import Category from "@/models/Category";
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     const isAdminScope = searchParams.get("scope") === "admin" || includeStats;
 
     if (isAdminScope) {
-      const auth = await requireAdmin();
+      const auth = await requireStaff();
 
       if (!auth.authorized) {
         return NextResponse.json(
@@ -307,7 +307,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await requireAdmin();
+    const auth = await requireStaff();
 
     if (!auth.authorized) {
       return NextResponse.json(

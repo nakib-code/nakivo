@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { isValidObjectId } from "mongoose";
 
 import connectDB from "@/lib/db";
-import { getCurrentUser, requireAdmin } from "@/lib/auth";
+import { getCurrentUser, requireStaff } from "@/lib/auth";
+import { isStaffRole } from "@/lib/roles";
 import Category from "@/models/Category";
 import Order from "@/models/Order";
 import Product from "@/models/Product";
@@ -75,9 +76,9 @@ export async function GET(
       );
     }
 
-    // Authorization: admins can view all orders.
+    // Authorization: admins and managers can view all orders.
     // Customers can view only their own orders.
-    if (user.role !== "admin") {
+    if (!isStaffRole(user.role)) {
       const populatedUser = order.user as unknown as
         | { _id?: { toString(): string } }
         | null;
@@ -126,8 +127,8 @@ export async function PATCH(
   { params }: RouteParams
 ) {
   try {
-    // Authentication & Admin Authorization
-    const auth = await requireAdmin();
+    // Authentication & Staff Authorization (Admin or Manager)
+    const auth = await requireStaff();
 
     if (!auth.authorized) {
       return NextResponse.json(
@@ -193,7 +194,11 @@ export async function PATCH(
 
     const updatedOrder = await updateOrderStatus(id, status);
 
-    if (status === "Cancelled" || status === "Delivered") {
+    if (
+      status === "Processing" ||
+      status === "Cancelled" ||
+      status === "Delivered"
+    ) {
       try {
         revalidatePath("/");
         revalidatePath("/products");

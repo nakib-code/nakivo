@@ -1,14 +1,13 @@
 import { NextAuthOptions } from "next-auth";
 import { getServerSession } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import CredentialsProvider from "next-auth/providers/credentials";
 
 import { env } from "@/lib/env";
+import { isAdminRole, isStaffRole } from "@/lib/roles";
 import {
   findOrCreateGoogleUser,
   getUserByEmail,
   getUserById,
-  validateCredentials,
 } from "@/service/auth.service";
 
 interface GoogleProfile {
@@ -19,43 +18,11 @@ interface GoogleProfile {
 export const authOptions: NextAuthOptions = {
   providers: [
     // =========================
-    // Google Authentication
+    // Google Authentication (Sole Sign-In Provider)
     // =========================
     GoogleProvider({
       clientId: env.GOOGLE_CLIENT_ID,
       clientSecret: env.GOOGLE_CLIENT_SECRET,
-    }),
-
-    // =========================
-    // Credentials Authentication
-    // =========================
-    CredentialsProvider({
-      name: "Credentials",
-
-      credentials: {
-        email: {
-          label: "Email",
-          type: "email",
-        },
-
-        password: {
-          label: "Password",
-          type: "password",
-        },
-      },
-
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error("Email and password are required.");
-        }
-
-        const user = await validateCredentials(
-          credentials.email,
-          credentials.password
-        );
-
-        return user;
-      },
     }),
   ],
 
@@ -64,12 +31,10 @@ export const authOptions: NextAuthOptions = {
     // Sign In
     // =========================
     async signIn({ user, account, profile }) {
-      // Credentials login
       if (account?.provider !== "google") {
-        return true;
+        return false;
       }
 
-      // Google login
       if (!user.email) {
         return false;
       }
@@ -86,6 +51,7 @@ export const authOptions: NextAuthOptions = {
         // Attach database information
         user.id = dbUser._id.toString();
         user.role = dbUser.role;
+        user.status = dbUser.status;
 
         return true;
       } catch (error) {
@@ -231,7 +197,7 @@ export async function getCurrentUser() {
 }
 
 // ======================================================
-// Require Admin
+// Require Admin (Strict — Admin Only)
 // ======================================================
 
 export async function requireAdmin() {
@@ -246,11 +212,44 @@ export async function requireAdmin() {
     };
   }
 
-  if (user.role !== "admin" || user.status !== "active") {
+  if (!isAdminRole(user.role) || user.status !== "active") {
     return {
       authorized: false as const,
       status: 403,
       message: "Admin access required",
+      user,
+    };
+  }
+
+  return {
+    authorized: true as const,
+    status: 200,
+    message: "Authorized",
+    user,
+  };
+}
+
+// ======================================================
+// Require Staff (Admin or Manager — Store Operations)
+// ======================================================
+
+export async function requireStaff() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return {
+      authorized: false as const,
+      status: 401,
+      message: "Authentication required",
+      user: null,
+    };
+  }
+
+  if (!isStaffRole(user.role) || user.status !== "active") {
+    return {
+      authorized: false as const,
+      status: 403,
+      message: "Staff access required",
       user,
     };
   }

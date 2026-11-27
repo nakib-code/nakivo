@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import HeroBanner from "@/models/HeroBanner";
 import { deleteFromCloudinary, uploadToCloudinary } from "@/lib/cloudinary";
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   let uploadedPublicId = "";
 
   try {
-    const auth = await requireAdmin();
+    const auth = await requireStaff();
 
     if (!auth.authorized) {
       return NextResponse.json(
@@ -226,7 +226,7 @@ export async function POST(request: NextRequest) {
 export async function GET(){
 
 try{
-const auth = await requireAdmin();
+const auth = await requireStaff();
 
 if (!auth.authorized) {
 return NextResponse.json(

@@ -83,7 +83,7 @@ export async function createGoogleUser(
     email: data.email.trim().toLowerCase(),
     image: data.image ?? "",
     provider: "google",
-    role: "customer",
+    role: "user",
     status: "active",
   });
 }

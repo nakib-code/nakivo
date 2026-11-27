@@ -1,41 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import connectDB from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import Order from "@/models/Order";
 
 export async function GET(req: NextRequest) {
   try {
-    // ========================================
-    // Authentication
-    // ========================================
+    const auth = await requireStaff();
 
-    const user = await getCurrentUser();
-
-    if (!user) {
+    if (!auth.authorized) {
       return NextResponse.json(
         {
           success: false,
-          message: "Authentication required",
+          message: auth.message,
         },
         {
-          status: 401,
-        }
-      );
-    }
-
-    // ========================================
-    // Admin Check
-    // ========================================
-
-    if (user.role !== "admin") {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Admin access required",
-        },
-        {
-          status: 403,
+          status: auth.status,
         }
       );
     }
