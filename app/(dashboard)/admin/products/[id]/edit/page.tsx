@@ -7,7 +7,12 @@ import { Loader2 } from "lucide-react";
 
 import { useCategories } from "@/hooks/useCategories";
 import { useSingleProduct, useUpdateProduct } from "@/hooks/useProducts";
-import type { IProduct, IProductImage } from "@/types";
+import {
+  normalizeProductPlacement,
+  PRODUCT_PLACEMENT_LABELS,
+  PRODUCT_PLACEMENTS,
+} from "@/lib/product-placement";
+import type { IProduct, IProductImage, ProductPlacement } from "@/types";
 
 const MAX_IMAGES = 5;
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -28,6 +33,11 @@ function EditProductForm({ id, product }: EditProductFormProps) {
     category: product.category || "",
     price: Number.isFinite(Number(product.price)) ? String(product.price) : "",
     stock: Number.isFinite(Number(product.stock)) ? String(product.stock) : "",
+    placement: normalizeProductPlacement(product.placement) as ProductPlacement,
+    comboPrice:
+      product.comboPrice !== undefined && product.comboPrice !== null
+        ? String(product.comboPrice)
+        : "",
   });
 
   const [images, setImages] = useState<File[]>([]);
@@ -123,6 +133,11 @@ function EditProductForm({ id, product }: EditProductFormProps) {
     formData.append("category", category);
     formData.append("price", String(price));
     formData.append("stock", String(stock));
+    formData.append("placement", form.placement);
+    formData.append(
+      "comboPrice",
+      form.placement === "main" ? "" : form.comboPrice.trim()
+    );
 
     images.forEach((image) => {
       formData.append("images", image);
@@ -245,6 +260,59 @@ function EditProductForm({ id, product }: EditProductFormProps) {
           ))}
         </select>
       </div>
+
+      {/* Placement */}
+      <div className="space-y-1.5">
+        <label htmlFor="placement" className="block text-sm font-medium">
+          Product Placement
+        </label>
+        <select
+          id="placement"
+          name="placement"
+          value={form.placement}
+          onChange={handleChange}
+          required
+          disabled={updateProduct.isPending}
+          className="w-full rounded-xl border bg-white p-3 text-sm"
+        >
+          {PRODUCT_PLACEMENTS.map((option) => (
+            <option key={option} value={option}>
+              {PRODUCT_PLACEMENT_LABELS[option]}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-slate-500">
+          Choose whether this product appears in the main store, only on /combo,
+          or both.
+        </p>
+      </div>
+
+      {/* Optional Combo Price */}
+      {(form.placement === "combo" || form.placement === "both") && (
+        <div className="space-y-1.5">
+          <label htmlFor="comboPrice" className="block text-sm font-medium">
+            Combo Price (৳){" "}
+            <span className="font-normal text-slate-400">(optional)</span>
+          </label>
+          <input
+            id="comboPrice"
+            name="comboPrice"
+            type="number"
+            min="0"
+            step="any"
+            value={form.comboPrice}
+            onChange={handleChange}
+            placeholder="Leave empty to use regular/flash price"
+            disabled={updateProduct.isPending}
+            className="w-full rounded-xl border p-3 text-sm"
+          />
+          <p className="text-xs text-slate-500">
+            Applied when purchased inside a locked 3+ item combo bundle (if
+            lower than active price). Clear this field to remove the combo
+            price.
+          </p>
+        </div>
+      )}
 
       {/* Price & Stock */}
       <div className="grid gap-4 md:grid-cols-2">

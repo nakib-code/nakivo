@@ -24,6 +24,8 @@ export interface IUser extends Document {
 }
 
 // Product Types
+export type ProductPlacement = "main" | "combo" | "both";
+
 export interface IProductImage {
   url: string;
   publicId: string;
@@ -41,6 +43,10 @@ export interface IProduct {
   category: string;
 
   stock: number;
+
+  placement?: ProductPlacement;
+
+  comboPrice?: number;
 
   images: {
     url: string;

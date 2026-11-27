@@ -30,6 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  PRODUCT_PLACEMENT_LABELS,
+  PRODUCT_PLACEMENTS,
+} from "@/lib/product-placement";
+import type { ProductPlacement } from "@/types";
 
 interface Category {
   _id: string;
@@ -66,6 +71,8 @@ export default function CreateProductPage() {
   const [price, setPrice] = useState("");
   const [category, setCategory] = useState("");
   const [stock, setStock] = useState("");
+  const [placement, setPlacement] = useState<ProductPlacement>("main");
+  const [comboPrice, setComboPrice] = useState("");
 
   // =========================
   // Images
@@ -318,6 +325,18 @@ export default function CreateProductPage() {
         stock
       );
 
+      formData.append(
+        "placement",
+        placement
+      );
+
+      if (
+        (placement === "combo" || placement === "both") &&
+        comboPrice.trim() !== ""
+      ) {
+        formData.append("comboPrice", comboPrice.trim());
+      }
+
       images.forEach((image) => {
         formData.append(
           "images",
@@ -555,6 +574,69 @@ export default function CreateProductPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Placement */}
+
+              <div className="space-y-2 md:col-span-3">
+                <label className="text-sm font-medium">
+                  Product Placement
+                </label>
+
+                <Select
+                  value={placement}
+                  onValueChange={(value) =>
+                    setPlacement(value as ProductPlacement)
+                  }
+                >
+                  <SelectTrigger className="w-full sm:max-w-xs">
+                    <SelectValue placeholder="Select placement" />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    {PRODUCT_PLACEMENTS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {PRODUCT_PLACEMENT_LABELS[option]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <p className="text-xs text-muted-foreground">
+                  Choose whether this product appears in the main store, only on
+                  the /combo builder, or both.
+                </p>
+              </div>
+
+              {(placement === "combo" || placement === "both") && (
+                <div className="space-y-2 md:col-span-3">
+                  <label
+                    htmlFor="comboPrice"
+                    className="text-sm font-medium"
+                  >
+                    Combo Price (৳){" "}
+                    <span className="font-normal text-muted-foreground">
+                      (Optional)
+                    </span>
+                  </label>
+
+                  <Input
+                    id="comboPrice"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Leave blank to use regular/flash price"
+                    value={comboPrice}
+                    onChange={(event) => setComboPrice(event.target.value)}
+                    className="sm:max-w-xs"
+                  />
+
+                  <p className="text-xs text-muted-foreground">
+                    Applied automatically when this item is ordered inside a
+                    valid 3+ item combo bundle (must be lower than active price
+                    to apply).
+                  </p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

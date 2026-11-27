@@ -23,6 +23,7 @@ import {
   calculateComboPricing,
   COMBO_MIN_ITEMS,
   getComboSelectionStatus,
+  resolveComboItemUnitPrice,
   type ComboSelectionEntry,
 } from "@/lib/combo";
 import { formatBDT } from "@/lib/currency";
@@ -46,7 +47,7 @@ const PAGE_SIZE = 24;
 export default function ComboBuilder({ products }: ComboBuilderProps) {
   const router = useRouter();
   const hydrated = useCartHydrated();
-  const addManyToCart = useCartStore((state) => state.addManyToCart);
+  const addComboBundle = useCartStore((state) => state.addComboBundle);
 
   // Map of productId -> selected quantity
   const [selectedQuantities, setSelectedQuantities] = useState<
@@ -207,50 +208,43 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
       return null;
     }
 
-    const result = addManyToCart(selectedEntries);
+    const result = addComboBundle(selectedEntries);
 
-    if (result.addedUnits <= 0) {
+    if (!result.added || !result.bundle) {
       toast.error(
-        "Selected items have already reached maximum available stock in your cart."
+        result.message || "Unable to add combo bundle to your cart."
       );
       return null;
     }
 
-    for (const item of result.addedItems) {
-      if (item.product._id) {
-        trackAddToCart({
-          item_id: item.product._id,
-          item_name: item.product.title,
-          item_category: item.product.category,
-          price: item.price,
-          quantity: item.quantity,
-        });
-      }
+    for (const entry of result.bundle.items) {
+      trackAddToCart({
+        item_id: entry.product._id,
+        item_name: entry.product.title,
+        price: entry.product.price,
+        quantity: entry.quantity,
+      });
     }
 
-    return result;
+    return result.bundle;
   };
 
   const handleAddComboToCart = () => {
-    const result = commitComboToCart();
-    if (!result) return;
+    const bundle = commitComboToCart();
+    if (!bundle) return;
 
-    if (result.skippedCount > 0) {
-      toast.success(
-        `Added ${result.addedUnits} combo items to cart (${result.skippedCount} skipped due to stock limits).`
-      );
-    } else {
-      toast.success(
-        `Combo (${result.addedUnits} items) added to your cart!`
-      );
-    }
+    const totalAdded = bundle.items.reduce(
+      (sum, entry) => sum + entry.quantity,
+      0
+    );
 
+    toast.success(`Combo Pack (${totalAdded} items) added to your cart!`);
     setSelectedQuantities({});
   };
 
   const handleBuyComboNow = () => {
-    const result = commitComboToCart();
-    if (!result) return;
+    const bundle = commitComboToCart();
+    if (!bundle) return;
 
     setSelectedQuantities({});
     router.push("/checkout");
@@ -374,6 +368,9 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
                       effectivePrice: Number(product.price) || 0,
                       discountPercent: 0,
                     };
+                const comboPricing = hydrated
+                  ? resolveComboItemUnitPrice(product, { isComboBundle: true })
+                  : null;
 
                 return (
                   <article
@@ -434,18 +431,33 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
                       <div className="mt-2 flex flex-wrap items-baseline gap-1.5">
                         <span
                           className={`text-sm font-black sm:text-base ${
-                            pricing.isActive ? "text-red-600" : "text-slate-950"
+                            comboPricing?.isComboPriceApplied
+                              ? "text-emerald-700"
+                              : pricing.isActive
+                                ? "text-red-600"
+                                : "text-slate-950"
                           }`}
                         >
-                          {formatBDT(pricing.effectivePrice)}
+                          {formatBDT(
+                            comboPricing?.isComboPriceApplied
+                              ? comboPricing.unitPrice
+                              : pricing.effectivePrice
+                          )}
                         </span>
 
-                        {pricing.isActive && (
+                        {(comboPricing?.isComboPriceApplied ||
+                          pricing.isActive) && (
                           <span className="text-[11px] text-slate-400 line-through">
                             {formatBDT(pricing.regularPrice)}
                           </span>
                         )}
                       </div>
+
+                      {comboPricing?.isComboPriceApplied && (
+                        <span className="mt-1 inline-flex w-fit rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                          Combo Price
+                        </span>
+                      )}
 
                       <p className="mt-1 text-[11px] text-slate-500">
                         {hasStock ? `${stock} in stock` : "Out of stock"}
@@ -569,7 +581,9 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
                 {selectedEntries.map(({ product, quantity }) => {
                   const id = product._id ?? "";
                   const unitPrice = hydrated
-                    ? getActiveFlashSalePricing(product).effectivePrice
+                    ? resolveComboItemUnitPrice(product, {
+                        isComboBundle: status.isReady,
+                      }).unitPrice
                     : Number(product.price) || 0;
                   const image = product.images?.[0]?.url || "";
 
@@ -647,7 +661,7 @@ export default function ComboBuilder({ products }: ComboBuilderProps) {
 
             {pricingSummary.savings > 0 && (
               <div className="flex items-center justify-between text-xs text-emerald-700">
-                <span>Flash Sale Savings</span>
+                <span>Combo &amp; Sale Savings</span>
                 <span className="font-semibold">
                   -{formatBDT(pricingSummary.savings)}
                 </span>

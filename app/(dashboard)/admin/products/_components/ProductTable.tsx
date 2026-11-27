@@ -16,6 +16,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatBDT } from "@/lib/currency";
 import { getActiveFlashSalePricing } from "@/lib/flash-sale";
+import {
+  normalizeProductPlacement,
+  PRODUCT_PLACEMENT_SHORT_LABELS,
+} from "@/lib/product-placement";
+import type { ProductPlacement } from "@/types";
 
 interface ProductImage {
   url: string;
@@ -33,6 +38,8 @@ export interface Product {
   category: string;
 
   stock: number;
+
+  placement?: ProductPlacement;
 
   images: ProductImage[];
 
@@ -252,9 +259,24 @@ export default function ProductTable({
                   <td className="px-5 py-4">
                     {(() => {
                       const flashSaleStatus = getFlashSaleStatus(product);
+                      const placement = normalizeProductPlacement(
+                        product.placement
+                      );
 
                       return (
                         <div className="flex flex-wrap gap-1">
+                          <Badge
+                            variant={
+                              placement === "combo"
+                                ? "default"
+                                : placement === "both"
+                                  ? "secondary"
+                                  : "outline"
+                            }
+                          >
+                            {PRODUCT_PLACEMENT_SHORT_LABELS[placement]}
+                          </Badge>
+
                           {product.isFeatured && (
                             <Badge>
                               Featured
@@ -277,12 +299,6 @@ export default function ProductTable({
                             <Badge variant="outline">
                               Expired Sale
                             </Badge>
-                          )}
-
-                          {!product.isFeatured && !flashSaleStatus && (
-                            <span className="text-xs text-slate-400">
-                              Standard
-                            </span>
                           )}
                         </div>
                       );

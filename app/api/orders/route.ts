@@ -7,12 +7,16 @@ import {
   calculateDeliveryDetails,
   normalizeDeliverySettings,
 } from "@/lib/delivery";
-import { getActiveFlashSalePricing } from "@/lib/flash-sale";
+import {
+  COMBO_MIN_ITEMS,
+  resolveComboItemUnitPrice,
+} from "@/lib/combo";
 import {
   isValidPhoneNumber,
   MAX_ORDER_DISTINCT_ITEMS,
   MAX_ORDER_ITEM_QUANTITY,
 } from "@/lib/order-validation";
+import { normalizeProductPlacement } from "@/lib/product-placement";
 import { getCurrentUser } from "@/lib/auth";
 import {
   OrderServiceError,
@@ -41,6 +45,11 @@ interface OrderItemInput {
   quantity: number;
 }
 
+interface ComboBundleInput {
+  bundleId?: string;
+  items: OrderItemInput[];
+}
+
 interface ShippingAddressInput {
   address: string;
   city: string;
@@ -67,20 +76,6 @@ function errorResponse(message: string, status = 400) {
   );
 }
 
-function getActiveProductPrice(product: {
-  price: number;
-  isFlashSale?: boolean;
-  flashSalePrice?: number;
-  flashSaleStart?: Date | string;
-  flashSaleEnd?: Date | string;
-}) {
-  const pricing = getActiveFlashSalePricing(product);
-  return {
-    price: pricing.effectivePrice,
-    isFlashSale: pricing.isActive,
-  };
-}
-
 // ==================================================
 // CREATE ORDER
 // ==================================================
@@ -99,6 +94,7 @@ export async function POST(req: NextRequest) {
     // Parse request safely
     let body: {
       items?: OrderItemInput[];
+      comboBundles?: ComboBundleInput[];
       shippingAddress?: ShippingAddressInput;
       paymentMethod?: string;
     };
@@ -113,7 +109,7 @@ export async function POST(req: NextRequest) {
       return errorResponse("Invalid request body.");
     }
 
-    const { items, shippingAddress } = body;
+    const { items, comboBundles, shippingAddress } = body;
 
     // COD is the only supported payment method.
     if (
@@ -125,17 +121,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate items
-    if (!Array.isArray(items) || items.length === 0) {
+    // Validate items & optional comboBundles
+    if (items !== undefined && !Array.isArray(items)) {
+      return errorResponse("Invalid order items payload.");
+    }
+
+    if (comboBundles !== undefined && !Array.isArray(comboBundles)) {
+      return errorResponse("Invalid combo bundles payload.");
+    }
+
+    const regularItemsInput = Array.isArray(items) ? items : [];
+    const comboBundlesInput = Array.isArray(comboBundles) ? comboBundles : [];
+
+    if (regularItemsInput.length === 0 && comboBundlesInput.length === 0) {
       return errorResponse(
         "Order must contain at least one product."
       );
     }
 
-    if (items.length > MAX_ORDER_DISTINCT_ITEMS) {
-      return errorResponse(
-        "Too many different products in one order."
-      );
+    if (comboBundlesInput.length > 25) {
+      return errorResponse("Too many combo bundles in one order.");
     }
 
     // Validate shipping information
@@ -174,10 +179,11 @@ export async function POST(req: NextRequest) {
       return errorResponse("Please select a valid delivery area.");
     }
 
-    // Validate and combine duplicate product IDs.
-    const quantities = new Map<string, number>();
+    // Validate and merge quantities across regular items + combo bundles.
+    const regularQuantities = new Map<string, number>();
+    const totalQuantities = new Map<string, number>();
 
-    for (const item of items) {
+    for (const item of regularItemsInput) {
       if (
         !item ||
         typeof item.product !== "string" ||
@@ -197,16 +203,87 @@ export async function POST(req: NextRequest) {
       }
 
       const productId = item.product;
-      const combinedQuantity =
-        (quantities.get(productId) ?? 0) + quantity;
+      const combinedTotal = (totalQuantities.get(productId) ?? 0) + quantity;
 
-      if (combinedQuantity > MAX_ORDER_ITEM_QUANTITY) {
+      if (combinedTotal > MAX_ORDER_ITEM_QUANTITY) {
         return errorResponse(
           `The quantity for a product cannot exceed ${MAX_ORDER_ITEM_QUANTITY}.`
         );
       }
 
-      quantities.set(productId, combinedQuantity);
+      regularQuantities.set(
+        productId,
+        (regularQuantities.get(productId) ?? 0) + quantity
+      );
+      totalQuantities.set(productId, combinedTotal);
+    }
+
+    const normalizedComboBundles: Array<{
+      bundleId?: string;
+      quantities: Map<string, number>;
+    }> = [];
+
+    for (const bundle of comboBundlesInput) {
+      if (!bundle || typeof bundle !== "object" || !Array.isArray(bundle.items)) {
+        return errorResponse("Each combo bundle must contain a valid items list.");
+      }
+
+      const bundleQuantities = new Map<string, number>();
+      let bundleUnitTotal = 0;
+
+      for (const item of bundle.items) {
+        if (
+          !item ||
+          typeof item.product !== "string" ||
+          !isValidObjectId(item.product)
+        ) {
+          return errorResponse("A valid product ID is required in combo bundles.");
+        }
+
+        const quantity = Number(item.quantity);
+
+        if (
+          !Number.isSafeInteger(quantity) ||
+          quantity < 1 ||
+          quantity > MAX_ORDER_ITEM_QUANTITY
+        ) {
+          return errorResponse("Invalid product quantity in combo bundle.");
+        }
+
+        const productId = item.product;
+        const combinedTotal = (totalQuantities.get(productId) ?? 0) + quantity;
+
+        if (combinedTotal > MAX_ORDER_ITEM_QUANTITY) {
+          return errorResponse(
+            `The quantity for a product cannot exceed ${MAX_ORDER_ITEM_QUANTITY}.`
+          );
+        }
+
+        bundleQuantities.set(
+          productId,
+          (bundleQuantities.get(productId) ?? 0) + quantity
+        );
+        totalQuantities.set(productId, combinedTotal);
+        bundleUnitTotal += quantity;
+      }
+
+      if (bundleUnitTotal < COMBO_MIN_ITEMS) {
+        return errorResponse(
+          `Each combo bundle must contain at least ${COMBO_MIN_ITEMS} combo-eligible items.`
+        );
+      }
+
+      normalizedComboBundles.push({
+        bundleId:
+          typeof bundle.bundleId === "string" ? bundle.bundleId : undefined,
+        quantities: bundleQuantities,
+      });
+    }
+
+    if (totalQuantities.size > MAX_ORDER_DISTINCT_ITEMS) {
+      return errorResponse(
+        "Too many different products in one order."
+      );
     }
 
     // Read delivery settings from the database with safe fallback defaults.
@@ -218,8 +295,8 @@ export async function POST(req: NextRequest) {
       const orderItems: OrderItemSnapshot[] = [];
       let subtotal = 0;
 
-      // Batch-fetch all requested products in a single query and compute authoritative server prices.
-      const productIds = Array.from(quantities.keys());
+      // Batch-fetch all requested products in a single query.
+      const productIds = Array.from(totalQuantities.keys());
       const productsQuery = Product.find({ _id: { $in: productIds } });
       if (session) {
         productsQuery.session(session);
@@ -229,7 +306,8 @@ export async function POST(req: NextRequest) {
         fetchedProducts.map((doc) => [doc._id.toString(), doc])
       );
 
-      for (const [productId, quantity] of quantities.entries()) {
+      // Verify existence and merged stock for every distinct product across the entire order.
+      for (const [productId, totalQty] of totalQuantities.entries()) {
         const product = productMap.get(productId);
 
         if (!product) {
@@ -241,7 +319,7 @@ export async function POST(req: NextRequest) {
 
         if (
           !Number.isSafeInteger(product.stock) ||
-          product.stock < quantity
+          product.stock < totalQty
         ) {
           throw new OrderServiceError(
             `${product.title} has only ${Math.max(
@@ -251,25 +329,76 @@ export async function POST(req: NextRequest) {
             400
           );
         }
+      }
 
-        const { price } = getActiveProductPrice(product);
+      // 1. Validate and price regular items (combo-exclusive products are forbidden here).
+      for (const [productId, quantity] of regularQuantities.entries()) {
+        const product = productMap.get(productId)!;
+        const placement = normalizeProductPlacement(product.placement);
 
-        if (!Number.isFinite(price) || price <= 0) {
+        if (placement === "combo") {
+          throw new OrderServiceError(
+            "Combo-exclusive items must be ordered inside a valid 3+ item combo bundle.",
+            400
+          );
+        }
+
+        const resolved = resolveComboItemUnitPrice(product, {
+          isComboBundle: false,
+        });
+
+        if (!Number.isFinite(resolved.unitPrice) || resolved.unitPrice <= 0) {
           throw new OrderServiceError(
             `Invalid price for ${product.title}.`,
             400
           );
         }
 
-        subtotal += price * quantity;
+        subtotal += resolved.unitPrice * quantity;
 
         orderItems.push({
           product: product._id,
           title: product.title,
           image: product.images?.[0]?.url || "",
-          price,
+          price: resolved.unitPrice,
           quantity,
         });
+      }
+
+      // 2. Validate and price each locked combo bundle (all items must be combo-eligible).
+      for (const bundle of normalizedComboBundles) {
+        for (const [productId, quantity] of bundle.quantities.entries()) {
+          const product = productMap.get(productId)!;
+          const placement = normalizeProductPlacement(product.placement);
+
+          if (placement !== "combo" && placement !== "both") {
+            throw new OrderServiceError(
+              `${product.title} is not eligible for combo bundles.`,
+              400
+            );
+          }
+
+          const resolved = resolveComboItemUnitPrice(product, {
+            isComboBundle: true,
+          });
+
+          if (!Number.isFinite(resolved.unitPrice) || resolved.unitPrice <= 0) {
+            throw new OrderServiceError(
+              `Invalid price for ${product.title}.`,
+              400
+            );
+          }
+
+          subtotal += resolved.unitPrice * quantity;
+
+          orderItems.push({
+            product: product._id,
+            title: product.title,
+            image: product.images?.[0]?.url || "",
+            price: resolved.unitPrice,
+            quantity,
+          });
+        }
       }
 
       if (!Number.isFinite(subtotal) || subtotal <= 0) {
@@ -305,19 +434,20 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Atomically decrease stock only if enough stock remains.
+      // Atomically decrease stock per distinct product using merged quantities.
       // In non-transactional fallback mode, compensate already-deducted items on failure.
       const deductedItems: Array<{ product: unknown; quantity: number }> = [];
 
       try {
-        for (const item of orderItems) {
+        for (const [productId, totalQty] of totalQuantities.entries()) {
+          const product = productMap.get(productId)!;
           const result = await Product.updateOne(
             {
-              _id: item.product,
-              stock: { $gte: item.quantity },
+              _id: product._id,
+              stock: { $gte: totalQty },
             },
             {
-              $inc: { stock: -item.quantity },
+              $inc: { stock: -totalQty },
             },
             session ? { session } : undefined
           );
@@ -330,8 +460,8 @@ export async function POST(req: NextRequest) {
           }
 
           deductedItems.push({
-            product: item.product,
-            quantity: item.quantity,
+            product: product._id,
+            quantity: totalQty,
           });
         }
 

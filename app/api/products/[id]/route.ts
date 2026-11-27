@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 
 import { requireAdmin } from "@/lib/auth";
 import connectDB from "@/lib/db";
+import { isValidProductPlacement } from "@/lib/product-placement";
 import Product from "@/models/Product";
 import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary";
 
@@ -146,6 +147,53 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     const priceValue = formData.get("price")?.toString();
 
     const stockValue = formData.get("stock")?.toString();
+
+    const placementValue = formData.get("placement")?.toString().trim();
+
+    if (placementValue !== undefined) {
+      if (!isValidProductPlacement(placementValue)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid product placement",
+          },
+          { status: 400 },
+        );
+      }
+
+      updateData.placement = placementValue;
+    }
+
+    const effectivePlacement =
+      placementValue && isValidProductPlacement(placementValue)
+        ? placementValue
+        : product.placement ?? "main";
+
+    const comboPriceValue = formData.get("comboPrice")?.toString();
+
+    if (effectivePlacement === "main") {
+      unsetData.comboPrice = 1;
+    } else if (comboPriceValue !== undefined) {
+      const trimmedComboPrice = comboPriceValue.trim();
+
+      if (trimmedComboPrice === "") {
+        unsetData.comboPrice = 1;
+      } else {
+        const parsedComboPrice = Number(trimmedComboPrice);
+
+        if (!Number.isFinite(parsedComboPrice) || parsedComboPrice < 0) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "Combo price must be a non-negative number",
+            },
+            { status: 400 },
+          );
+        }
+
+        updateData.comboPrice = parsedComboPrice;
+      }
+    }
 
     // ========================================
     // Update Basic Fields
@@ -635,6 +683,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       flashSalePrice?: unknown;
       flashSaleStart?: unknown;
       flashSaleEnd?: unknown;
+      placement?: unknown;
     };
 
     try {
@@ -657,6 +706,24 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         },
         { status: 400 },
       );
+    }
+
+    // ========================================
+    // PLACEMENT
+    // ========================================
+
+    if (body.placement !== undefined) {
+      if (!isValidProductPlacement(body.placement)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid product placement",
+          },
+          { status: 400 },
+        );
+      }
+
+      product.placement = body.placement;
     }
 
     // ========================================
@@ -686,6 +753,10 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
       if (typeof body.isFeatured === "boolean") {
         setFields.isFeatured = body.isFeatured;
+      }
+
+      if (isValidProductPlacement(body.placement)) {
+        setFields.placement = body.placement;
       }
 
       const updatedProduct = await Product.findByIdAndUpdate(

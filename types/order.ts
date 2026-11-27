@@ -20,6 +20,11 @@ export interface CreateOrderItem {
   quantity: number;
 }
 
+export interface CreateComboBundlePayload {
+  bundleId?: string;
+  items: CreateOrderItem[];
+}
+
 // ==================================================
 // DELIVERY AREA
 // ==================================================
@@ -59,6 +64,7 @@ export type OrderStatus =
 
 export interface CreateOrderPayload {
   items: CreateOrderItem[];
+  comboBundles?: CreateComboBundlePayload[];
   shippingAddress: ShippingAddress;
   paymentMethod: PaymentMethod;
 }

@@ -7,6 +7,11 @@ import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  PRODUCT_PLACEMENT_LABELS,
+  PRODUCT_PLACEMENTS,
+} from "@/lib/product-placement";
+import type { ProductPlacement } from "@/types";
 
 import ProductStats, {
   type ProductStatsSummary,
@@ -34,6 +39,9 @@ export default function AdminProducts() {
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [placementFilter, setPlacementFilter] = useState<
+    "all" | ProductPlacement
+  >("all");
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<PaginationInfo>({
     currentPage: 1,
@@ -90,10 +98,15 @@ export default function AdminProducts() {
           page: String(page),
           limit: String(PAGE_LIMIT),
           includeStats: "true",
+          scope: "admin",
         });
 
         if (debouncedSearch) {
           params.set("search", debouncedSearch);
+        }
+
+        if (placementFilter !== "all") {
+          params.set("placement", placementFilter);
         }
 
         const response = await fetch(`/api/products?${params.toString()}`, {
@@ -165,7 +178,7 @@ export default function AdminProducts() {
     void loadProducts();
 
     return () => controller.abort();
-  }, [page, debouncedSearch, reloadTick]);
+  }, [page, debouncedSearch, placementFilter, reloadTick]);
 
   const filteredProducts = products;
 
@@ -401,19 +414,56 @@ export default function AdminProducts() {
         </Button>
       </div>
 
-      {/* Search */}
+      {/* Search & Placement Filter */}
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
 
-        <Input
-          value={search}
-          onChange={(event) =>
-            setSearch(event.target.value)
-          }
-          placeholder="Search products..."
-          className="pl-9"
-        />
+          <Input
+            value={search}
+            onChange={(event) =>
+              setSearch(event.target.value)
+            }
+            placeholder="Search products..."
+            className="pl-9"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setPlacementFilter("all");
+              setPage(1);
+            }}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+              placementFilter === "all"
+                ? "bg-black text-white"
+                : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-black"
+            }`}
+          >
+            All Placements
+          </button>
+
+          {PRODUCT_PLACEMENTS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => {
+                setPlacementFilter(option);
+                setPage(1);
+              }}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                placementFilter === option
+                  ? "bg-black text-white"
+                  : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-black"
+              }`}
+            >
+              {PRODUCT_PLACEMENT_LABELS[option]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Stats */}

@@ -1,7 +1,71 @@
-import { getActiveFlashSalePricing } from "@/lib/flash-sale";
-import type { IProduct } from "@/types";
+import {
+  getActiveFlashSalePricing,
+  type FlashSaleProductLike,
+} from "@/lib/flash-sale";
+import { normalizeProductPlacement } from "@/lib/product-placement";
+import type { IProduct, ProductPlacement } from "@/types";
 
 export const COMBO_MIN_ITEMS = 3;
+
+export interface ComboPriceableProduct extends FlashSaleProductLike {
+  comboPrice?: number;
+  placement?: ProductPlacement;
+}
+
+export interface ResolvedComboUnitPrice {
+  unitPrice: number;
+  regularPrice: number;
+  baseEffectivePrice: number;
+  isComboPriceApplied: boolean;
+  isFlashSale: boolean;
+  savingsPerUnit: number;
+}
+
+/**
+ * Single authoritative unit-price resolver shared across ComboBuilder,
+ * useCartStore, and server-side POST /api/orders.
+ *
+ * - Base active price comes from `getActiveFlashSalePricing(product, nowMs)`.
+ * - If `isComboBundle` is true AND `product.comboPrice` is a valid positive
+ *   number strictly lower than the active price, returns `product.comboPrice`.
+ * - Otherwise returns the active regular or flash-sale price.
+ */
+export function resolveComboItemUnitPrice(
+  product: ComboPriceableProduct,
+  options: { isComboBundle: boolean; nowMs?: number }
+): ResolvedComboUnitPrice {
+  const base = getActiveFlashSalePricing(product, options.nowMs);
+  const comboPrice =
+    product.comboPrice !== undefined && product.comboPrice !== null
+      ? Number(product.comboPrice)
+      : Number.NaN;
+
+  const canApplyComboPrice =
+    options.isComboBundle &&
+    Number.isFinite(comboPrice) &&
+    comboPrice > 0 &&
+    comboPrice < base.effectivePrice;
+
+  if (canApplyComboPrice) {
+    return {
+      unitPrice: comboPrice,
+      regularPrice: base.regularPrice,
+      baseEffectivePrice: base.effectivePrice,
+      isComboPriceApplied: true,
+      isFlashSale: false,
+      savingsPerUnit: Math.max(0, base.regularPrice - comboPrice),
+    };
+  }
+
+  return {
+    unitPrice: base.effectivePrice,
+    regularPrice: base.regularPrice,
+    baseEffectivePrice: base.effectivePrice,
+    isComboPriceApplied: false,
+    isFlashSale: base.isActive,
+    savingsPerUnit: Math.max(0, base.regularPrice - base.effectivePrice),
+  };
+}
 
 export interface ComboSelectionEntry {
   product: IProduct;
@@ -95,6 +159,16 @@ export function calculateComboPricing(
   nowMs: number = Date.now()
 ): ComboPricingSummary {
   let totalItems = 0;
+
+  for (const entry of entries) {
+    const qty =
+      Number.isFinite(entry.quantity) && entry.quantity > 0
+        ? Math.floor(entry.quantity)
+        : 0;
+    totalItems += qty;
+  }
+
+  const isComboBundle = totalItems >= COMBO_MIN_ITEMS;
   let regularTotal = 0;
   let effectiveTotal = 0;
 
@@ -108,10 +182,12 @@ export function calculateComboPricing(
       continue;
     }
 
-    const pricing = getActiveFlashSalePricing(entry.product, nowMs);
-    totalItems += qty;
+    const pricing = resolveComboItemUnitPrice(entry.product, {
+      isComboBundle,
+      nowMs,
+    });
     regularTotal += pricing.regularPrice * qty;
-    effectiveTotal += pricing.effectivePrice * qty;
+    effectiveTotal += pricing.unitPrice * qty;
   }
 
   const savings = Math.max(0, regularTotal - effectiveTotal);
@@ -121,5 +197,87 @@ export function calculateComboPricing(
     regularTotal,
     effectiveTotal,
     savings,
+  };
+}
+
+export interface ComboOrderRuleItem {
+  placement?: ProductPlacement;
+  quantity: number;
+}
+
+export interface ComboOrderRuleResult {
+  hasComboOnlyItem: boolean;
+  comboEligibleCount: number;
+  minItems: number;
+  remaining: number;
+  isValid: boolean;
+  message?: string;
+}
+
+/**
+ * Enforces the minimum-3 combo rule whenever an order/cart contains at least
+ * one `placement === "combo"` (combo-exclusive) product.
+ *
+ * Counts total quantity of all combo-eligible items (`"combo"` or `"both"`).
+ * Regular `"main"` items do not count toward the combo minimum.
+ */
+export function validateComboOrderItems(
+  items: ReadonlyArray<ComboOrderRuleItem>,
+  minItems: number = COMBO_MIN_ITEMS
+): ComboOrderRuleResult {
+  const safeMin = Math.max(1, Math.floor(minItems));
+  let hasComboOnlyItem = false;
+  let comboEligibleCount = 0;
+
+  for (const item of items) {
+    const qty =
+      Number.isFinite(item.quantity) && item.quantity > 0
+        ? Math.floor(item.quantity)
+        : 0;
+
+    if (qty <= 0) {
+      continue;
+    }
+
+    const placement = normalizeProductPlacement(item.placement);
+
+    if (placement === "combo") {
+      hasComboOnlyItem = true;
+      comboEligibleCount += qty;
+    } else if (placement === "both") {
+      comboEligibleCount += qty;
+    }
+  }
+
+  if (!hasComboOnlyItem) {
+    return {
+      hasComboOnlyItem: false,
+      comboEligibleCount,
+      minItems: safeMin,
+      remaining: 0,
+      isValid: true,
+    };
+  }
+
+  const remaining = Math.max(0, safeMin - comboEligibleCount);
+  const isValid = remaining === 0;
+
+  if (!isValid) {
+    return {
+      hasComboOnlyItem: true,
+      comboEligibleCount,
+      minItems: safeMin,
+      remaining,
+      isValid: false,
+      message: `Combo-exclusive items require at least ${safeMin} combo items in your order (${comboEligibleCount} of ${safeMin} currently selected — add ${remaining} more).`,
+    };
+  }
+
+  return {
+    hasComboOnlyItem: true,
+    comboEligibleCount,
+    minItems: safeMin,
+    remaining: 0,
+    isValid: true,
   };
 }

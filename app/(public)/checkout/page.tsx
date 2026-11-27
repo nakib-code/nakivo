@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 
+import { validateComboOrderItems } from "@/lib/combo";
 import { formatBDT } from "@/lib/currency";
 import { isValidPhoneNumber } from "@/lib/order-validation";
 import {
@@ -28,10 +29,22 @@ export default function CheckoutPage() {
   const router = useRouter();
   const { data: session, status: sessionStatus } = useSession();
   const hydrated = useCartHydrated();
-  const { cart, getTotalPrice, clearCart, syncCartWithProducts } =
-    useCartStore();
+  const {
+    cart,
+    comboBundles,
+    getTotalPrice,
+    clearCart,
+    syncCartWithProducts,
+  } = useCartStore();
   const createOrderMutation = useCreateOrder();
-  const cartIdsKey = cart.map((item) => item._id).join(",");
+  const cartIdsKey = Array.from(
+    new Set([
+      ...cart.map((item) => item._id),
+      ...comboBundles.flatMap((bundle) =>
+        bundle.items.map((entry) => entry.product._id)
+      ),
+    ])
+  ).join(",");
 
   const [shipping, setShipping] = useState({
     address: "",
@@ -55,7 +68,7 @@ export default function CheckoutPage() {
     if (
       !hydrated ||
       sessionStatus !== "authenticated" ||
-      cart.length === 0 ||
+      (cart.length === 0 && comboBundles.length === 0) ||
       beginCheckoutTrackedRef.current
     ) {
       return;
@@ -63,15 +76,25 @@ export default function CheckoutPage() {
 
     beginCheckoutTrackedRef.current = true;
     trackBeginCheckout(
-      cart.map((item) => ({
-        item_id: item._id,
-        item_name: item.title,
-        price: item.price,
-        quantity: item.quantity,
-      })),
+      [
+        ...cart.map((item) => ({
+          item_id: item._id,
+          item_name: item.title,
+          price: item.price,
+          quantity: item.quantity,
+        })),
+        ...comboBundles.flatMap((bundle) =>
+          bundle.items.map((entry) => ({
+            item_id: entry.product._id,
+            item_name: entry.product.title,
+            price: entry.product.price,
+            quantity: entry.quantity,
+          }))
+        ),
+      ],
       getTotalPrice()
     );
-  }, [hydrated, sessionStatus, cart, getTotalPrice]);
+  }, [hydrated, sessionStatus, cart, comboBundles, getTotalPrice]);
 
   // Load delivery charges from Store Settings API.
   useEffect(() => {
@@ -142,11 +165,16 @@ export default function CheckoutPage() {
         } | null;
 
         if (!cancelled && json?.success && Array.isArray(json.data)) {
-          const { removedCount, updatedCount } = syncCartWithProducts(
-            json.data
-          );
+          const { removedCount, updatedCount, removedBundleCount } =
+            syncCartWithProducts(json.data);
 
-          if (removedCount > 0) {
+          if (removedBundleCount > 0) {
+            toast.info(
+              `${removedBundleCount} combo ${
+                removedBundleCount === 1 ? "pack was" : "packs were"
+              } removed because an item went out of stock or is no longer combo-eligible.`
+            );
+          } else if (removedCount > 0) {
             toast.info(
               `${removedCount} out-of-stock or unavailable ${
                 removedCount === 1 ? "item was" : "items were"
@@ -171,7 +199,11 @@ export default function CheckoutPage() {
   }, [hydrated, cartIdsKey, syncCartWithProducts]);
 
   const activeCart = hydrated ? cart : [];
+  const activeComboBundles = hydrated ? comboBundles : [];
+  const hasOrderItems =
+    activeCart.length > 0 || activeComboBundles.length > 0;
   const subtotal = hydrated ? getTotalPrice() : 0;
+  const comboRule = validateComboOrderItems(activeCart);
 
   const effectiveSettings = deliverySettings ?? DEFAULT_DELIVERY_SETTINGS;
   const deliveryDetails = calculateDeliveryDetails(
@@ -205,8 +237,16 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (activeCart.length === 0) {
+    if (!hasOrderItems) {
       toast.error("Your cart is empty");
+      return;
+    }
+
+    if (!comboRule.isValid) {
+      toast.error(
+        comboRule.message ||
+          "Combo-exclusive items require at least 3 combo items in your order."
+      );
       return;
     }
 
@@ -239,20 +279,41 @@ export default function CheckoutPage() {
       return;
     }
 
-    const checkoutItemsSnapshot = cart.map((item) => ({
-      item_id: item._id,
-      item_name: item.title,
-      price: item.price,
-      quantity: item.quantity,
-    }));
+    const checkoutItemsSnapshot = [
+      ...activeCart.map((item) => ({
+        item_id: item._id,
+        item_name: item.title,
+        price: item.price,
+        quantity: item.quantity,
+      })),
+      ...activeComboBundles.flatMap((bundle) =>
+        bundle.items.map((entry) => ({
+          item_id: entry.product._id,
+          item_name: entry.product.title,
+          price: entry.product.price,
+          quantity: entry.quantity,
+        }))
+      ),
+    ];
 
     trackAddPaymentInfo(checkoutItemsSnapshot, total, "COD");
 
     const payload: CreateOrderPayload = {
-      items: cart.map((item) => ({
+      items: activeCart.map((item) => ({
         product: item._id,
         quantity: item.quantity,
       })),
+      ...(activeComboBundles.length > 0
+        ? {
+            comboBundles: activeComboBundles.map((bundle) => ({
+              bundleId: bundle.bundleId,
+              items: bundle.items.map((entry) => ({
+                product: entry.product._id,
+                quantity: entry.quantity,
+              })),
+            })),
+          }
+        : {}),
       shippingAddress: {
         address: shipping.address.trim(),
         city: shipping.city.trim(),
@@ -546,10 +607,24 @@ export default function CheckoutPage() {
             </div>
           </section>
 
+          {!comboRule.isValid && activeCart.length > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3.5 text-sm text-amber-900">
+              <p className="font-semibold">{comboRule.message}</p>
+              <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold">
+                <Link href="/combo" className="underline underline-offset-4">
+                  Add more combo items
+                </Link>
+                <Link href="/cart" className="underline underline-offset-4">
+                  Edit cart
+                </Link>
+              </div>
+            </div>
+          )}
+
           {deliverySettings &&
             deliverySettings.minimumOrderAmount > 0 &&
             !meetsMinimumOrder &&
-            activeCart.length > 0 && (
+            hasOrderItems && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                 Minimum order amount is{" "}
                 <span className="font-semibold">
@@ -567,7 +642,8 @@ export default function CheckoutPage() {
             type="submit"
             disabled={
               createOrderMutation.isPending ||
-              activeCart.length === 0 ||
+              !hasOrderItems ||
+              !comboRule.isValid ||
               settingsLoading ||
               settingsError ||
               !deliverySettings ||
@@ -585,11 +661,56 @@ export default function CheckoutPage() {
             Order Summary
           </h2>
 
-          {cart.length === 0 ? (
+          {!hasOrderItems ? (
             <p className="text-sm text-muted-foreground">Your cart is empty.</p>
           ) : (
             <div className="space-y-3">
-              {cart.map((item) => (
+              {activeComboBundles.map((bundle, index) => {
+                const bundleUnits = bundle.items.reduce(
+                  (sum, entry) => sum + entry.quantity,
+                  0
+                );
+                const bundleTotal = bundle.items.reduce(
+                  (sum, entry) => sum + entry.product.price * entry.quantity,
+                  0
+                );
+
+                return (
+                  <div
+                    key={bundle.bundleId}
+                    className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-slate-900">
+                        Combo Pack{" "}
+                        {activeComboBundles.length > 1 ? `#${index + 1}` : ""} (
+                        {bundleUnits} items)
+                      </span>
+                      <span className="text-sm font-bold text-slate-950">
+                        {formatBDT(bundleTotal)}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 border-t border-slate-200 pt-2">
+                      {bundle.items.map((entry) => (
+                        <div
+                          key={`${bundle.bundleId}-${entry.product._id}`}
+                          className="flex items-start justify-between gap-2 text-xs text-slate-600"
+                        >
+                          <span className="line-clamp-1">
+                            {entry.product.title} ×{entry.quantity}
+                          </span>
+                          <span className="shrink-0 font-medium text-slate-800">
+                            {formatBDT(entry.product.price * entry.quantity)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {activeCart.map((item) => (
                 <div
                   key={item._id}
                   className="flex items-start justify-between gap-3 border-b pb-3"

@@ -1,6 +1,7 @@
 import "server-only";
 
 import connectDB from "@/lib/db";
+import { normalizeProductPlacement } from "@/lib/product-placement";
 import Product from "@/models/Product";
 import type { IProduct } from "@/types";
 
@@ -34,7 +35,13 @@ export async function getProducts(
 ): Promise<IProduct[]> {
   await connectDB();
 
-  const query: Record<string, unknown> = {};
+  const query: Record<string, unknown> = {
+    $or: [
+      { placement: { $in: ["main", "both"] } },
+      { placement: { $exists: false } },
+      { placement: null },
+    ],
+  };
 
   if (options.category && options.category !== "all") {
     query.category = options.category;
@@ -68,7 +75,7 @@ export async function getProducts(
 
   const products = await Product.find(query)
     .select(
-      "title description price category stock images ratings soldCount isFeatured isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt updatedAt"
+      "title description price category stock placement comboPrice images ratings soldCount isFeatured isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt updatedAt"
     )
     .sort(getSortOrder(options.sort))
     .limit(limit)
@@ -81,6 +88,11 @@ export async function getProducts(
     price: Number(product.price),
     category: product.category,
     stock: Number(product.stock ?? 0),
+    placement: normalizeProductPlacement(product.placement),
+    comboPrice:
+      product.comboPrice !== undefined && product.comboPrice !== null
+        ? Number(product.comboPrice)
+        : undefined,
     ratings: Number(product.ratings ?? 0),
     soldCount: Number(product.soldCount ?? 0),
     isFeatured: Boolean(product.isFeatured),
@@ -111,16 +123,18 @@ export async function getProducts(
 }
 
 /**
- * Fetches all in-stock products for the /combo builder with lean fields
- * (omitting heavy `description` from MongoDB and the RSC payload) so no
- * available product or category is hidden behind a fixed 100-item cap.
+ * Fetches all in-stock combo-eligible products (`placement: "combo" | "both"`)
+ * with lean fields (omitting heavy `description` from MongoDB and the RSC payload).
  */
 export async function getComboProducts(): Promise<IProduct[]> {
   await connectDB();
 
-  const products = await Product.find({ stock: { $gt: 0 } })
+  const products = await Product.find({
+    stock: { $gt: 0 },
+    placement: { $in: ["combo", "both"] },
+  })
     .select(
-      "title price category stock images isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt"
+      "title price category stock placement comboPrice images isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt"
     )
     .sort({ createdAt: -1 })
     .lean();
@@ -132,6 +146,11 @@ export async function getComboProducts(): Promise<IProduct[]> {
     price: Number(product.price),
     category: product.category,
     stock: Number(product.stock ?? 0),
+    placement: normalizeProductPlacement(product.placement),
+    comboPrice:
+      product.comboPrice !== undefined && product.comboPrice !== null
+        ? Number(product.comboPrice)
+        : undefined,
     ratings: 0,
     soldCount: 0,
     isFeatured: false,

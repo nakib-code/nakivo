@@ -1,9 +1,12 @@
 
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowRight,
+  Layers,
   Minus,
   Plus,
   ShoppingCart,
@@ -62,6 +65,11 @@ export default function ProductDetailsActions({
   // =========================
 
   const handleAddToCart = () => {
+    if (product.placement === "combo") {
+      toast.info("This product is only available as part of a 3+ item combo.");
+      return;
+    }
+
     if (product.stock <= 0) {
       toast.error("This product is currently out of stock");
       return;
@@ -108,6 +116,12 @@ export default function ProductDetailsActions({
   // =========================
 
   const handleBuyNow = () => {
+    if (product.placement === "combo") {
+      toast.info("This product is only available as part of a 3+ item combo.");
+      router.push("/combo");
+      return;
+    }
+
     if (product.stock <= 0) {
       toast.error("This product is currently out of stock");
       return;
@@ -133,6 +147,40 @@ export default function ProductDetailsActions({
 
     router.push("/checkout");
   };
+
+  // =========================
+  // Combo-Only Product Guard
+  // =========================
+
+  if (product.placement === "combo") {
+    return (
+      <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-900 text-white">
+            <Layers className="h-5 w-5" />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-amber-950">
+              Combo Exclusive Product
+            </p>
+            <p className="mt-1 text-xs leading-5 text-amber-900">
+              কম্বো হলে কমপক্ষে ৩টি প্রোডাক্ট নিন। This item cannot be purchased
+              individually — select it with 2 or more other items on the Combo
+              Builder.
+            </p>
+          </div>
+        </div>
+
+        <Button asChild size="lg" className="mt-4 w-full bg-black text-white hover:bg-slate-800">
+          <Link href="/combo">
+            Build Your Combo on /combo
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Link>
+        </Button>
+      </div>
+    );
+  }
 
   // =========================
   // Out Of Stock

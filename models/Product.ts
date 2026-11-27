@@ -56,6 +56,19 @@ const ProductSchema: Schema<IProduct> = new Schema(
       min: 0,
     },
 
+    // Storefront Placement
+    placement: {
+      type: String,
+      enum: ["main", "combo", "both"],
+      default: "main",
+    },
+
+    // Optional Combo Price (applied inside valid 3+ combo bundles)
+    comboPrice: {
+      type: Number,
+      min: 0,
+    },
+
     // Product Images
     images: {
       type: [ProductImageSchema],
@@ -121,6 +134,7 @@ ProductSchema.index({ isFeatured: 1, createdAt: -1 });
 ProductSchema.index({ isFlashSale: 1, flashSaleStart: 1, flashSaleEnd: 1 });
 ProductSchema.index({ price: 1 });
 ProductSchema.index({ stock: 1 });
+ProductSchema.index({ placement: 1, stock: 1, createdAt: -1 });
 
 const Product: Model<IProduct> =
   mongoose.models.Product ||

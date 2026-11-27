@@ -4,6 +4,7 @@ import { isValidObjectId } from "mongoose";
 
 import { requireAdmin } from "@/lib/auth";
 import connectDB from "@/lib/db";
+import { isValidProductPlacement } from "@/lib/product-placement";
 import Product from "@/models/Product";
 import { deleteFromCloudinary, uploadToCloudinary } from "@/lib/cloudinary";
 
@@ -41,9 +42,11 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search");
     const featured = searchParams.get("featured");
     const flashSale = searchParams.get("flashSale");
+    const placementParam = searchParams.get("placement");
     const sort = searchParams.get("sort");
     const idsParam = searchParams.get("ids");
     const includeStats = searchParams.get("includeStats") === "true";
+    const isAdminScope = searchParams.get("scope") === "admin" || includeStats;
 
     const pageValue = searchParams.get("page");
     const limitValue = searchParams.get("limit");
@@ -71,7 +74,7 @@ export async function GET(req: NextRequest) {
 
       const products = await Product.find({ _id: { $in: ids } })
         .select(
-          "title price stock images isFlashSale flashSalePrice flashSaleStart flashSaleEnd"
+          "title price stock placement comboPrice images isFlashSale flashSalePrice flashSaleStart flashSaleEnd"
         )
         .lean();
 
@@ -112,6 +115,26 @@ export async function GET(req: NextRequest) {
     // ========================================
 
     const query: Record<string, unknown> = {};
+
+    // Placement filtering:
+    // - Explicit placement query filters exact placement (treating missing placement as "main")
+    // - Public storefront queries without an explicit placement default to main-visible ("main" | "both")
+    // - Admin queries (scope=admin or includeStats=true) see all placements unless filtered
+    if (placementParam === "main") {
+      query.$or = [
+        { placement: "main" },
+        { placement: { $exists: false } },
+        { placement: null },
+      ];
+    } else if (placementParam === "combo" || placementParam === "both") {
+      query.placement = placementParam;
+    } else if (!isAdminScope) {
+      query.$or = [
+        { placement: { $in: ["main", "both"] } },
+        { placement: { $exists: false } },
+        { placement: null },
+      ];
+    }
 
     // Category
     if (category && category !== "all") {
@@ -161,7 +184,7 @@ export async function GET(req: NextRequest) {
 
       Product.find(query)
         .select(
-          "title description price category stock images ratings isFeatured isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt updatedAt"
+          "title description price category stock placement comboPrice images ratings isFeatured isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt updatedAt"
         )
         .sort(sortOrder)
         .skip(skip)
@@ -325,6 +348,52 @@ export async function POST(req: NextRequest) {
       .get("stock")
       ?.toString()
       .trim();
+
+    const placementValue = formData
+      .get("placement")
+      ?.toString()
+      .trim();
+
+    if (placementValue && !isValidProductPlacement(placementValue)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid product placement",
+        },
+        { status: 400 }
+      );
+    }
+
+    const placement =
+      placementValue && isValidProductPlacement(placementValue)
+        ? placementValue
+        : "main";
+
+    const comboPriceValue = formData
+      .get("comboPrice")
+      ?.toString()
+      .trim();
+
+    let comboPrice: number | undefined;
+
+    if (
+      comboPriceValue &&
+      (placement === "combo" || placement === "both")
+    ) {
+      const parsedComboPrice = Number(comboPriceValue);
+
+      if (!Number.isFinite(parsedComboPrice) || parsedComboPrice < 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Combo price must be a non-negative number",
+          },
+          { status: 400 }
+        );
+      }
+
+      comboPrice = parsedComboPrice;
+    }
 
     // ========================================
     // Validate Required Fields
@@ -547,6 +616,8 @@ export async function POST(req: NextRequest) {
         price,
         category,
         stock,
+        placement,
+        ...(comboPrice !== undefined ? { comboPrice } : {}),
         images,
         ratings: 0,
       });

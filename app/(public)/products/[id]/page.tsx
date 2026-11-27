@@ -11,6 +11,7 @@ import {
 import connectDB from "@/lib/db";
 import { formatBDT } from "@/lib/currency";
 import { getActiveFlashSalePricing } from "@/lib/flash-sale";
+import { normalizeProductPlacement } from "@/lib/product-placement";
 import Product from "@/models/Product";
 
 import ProductDetailsActions from "./ProductDetailsActions";
@@ -116,6 +117,13 @@ const serializedProduct = {
   category: product.category,
 
   stock: Number(product.stock),
+
+  placement: normalizeProductPlacement(product.placement),
+
+  comboPrice:
+    product.comboPrice !== undefined && product.comboPrice !== null
+      ? Number(product.comboPrice)
+      : undefined,
 
   ratings: Number(product.ratings ?? 0),
 
@@ -227,20 +235,28 @@ const serializedProduct = {
               justify-center
             "
           >
-            {/* Category */}
+            {/* Category & Placement */}
 
-            <p
-              className="
-                text-sm
-                font-semibold
-                uppercase
-                tracking-wider
-                text-slate-500
-              "
-            >
-              {serializedProduct.category ||
-                "General"}
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p
+                className="
+                  text-sm
+                  font-semibold
+                  uppercase
+                  tracking-wider
+                  text-slate-500
+                "
+              >
+                {serializedProduct.category ||
+                  "General"}
+              </p>
+
+              {serializedProduct.placement === "combo" && (
+                <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900">
+                  Combo Exclusive
+                </span>
+              )}
+            </div>
 
             {/* Title */}
 
