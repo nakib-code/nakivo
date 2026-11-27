@@ -98,6 +98,7 @@ export interface IOrder extends Document {
   deliveryCharge?: number;
   totalPrice: number;
   isPaid: boolean;
+  idempotencyKey?: string;
   status: "Pending" | "Processing" | "Delivered" | "Cancelled";
   createdAt: Date;
   updatedAt: Date;

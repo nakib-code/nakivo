@@ -43,8 +43,9 @@ const inputClass =
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (isSubmitting) return;
@@ -62,12 +63,35 @@ export default function ContactPage() {
       return;
     }
 
-    // Frontend demo only: no message is sent to a server yet.
     setIsSubmitting(true);
+    setErrorMessage("");
 
     try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, subject, message }),
+      });
+
+      const result = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        message?: string;
+      } | null;
+
+      if (!response.ok || !result?.success) {
+        setErrorMessage(
+          result?.message ||
+            "Unable to send your message right now. Please try again."
+        );
+        return;
+      }
+
       setSubmitted(true);
       form.reset();
+    } catch {
+      setErrorMessage(
+        "Network error. Please check your connection and try again."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -328,6 +352,15 @@ export default function ContactPage() {
                       className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-900/10"
                     />
                   </div>
+
+                  {errorMessage && (
+                    <p
+                      role="alert"
+                      className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                    >
+                      {errorMessage}
+                    </p>
+                  )}
 
                   <button
                     type="submit"

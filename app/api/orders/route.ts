@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { isValidObjectId, type ClientSession } from "mongoose";
 
@@ -32,9 +33,11 @@ import {
   sendMetaCapiEvent,
 } from "@/service/marketing/meta-capi.service";
 
+import Category from "@/models/Category";
 import Order from "@/models/Order";
 import Product from "@/models/Product";
 import StoreSettings from "@/models/StoreSettings";
+import User from "@/models/User";
 
 // ==================================================
 // TYPES
@@ -97,6 +100,7 @@ export async function POST(req: NextRequest) {
       comboBundles?: ComboBundleInput[];
       shippingAddress?: ShippingAddressInput;
       paymentMethod?: string;
+      idempotencyKey?: unknown;
     };
 
     try {
@@ -110,6 +114,42 @@ export async function POST(req: NextRequest) {
     }
 
     const { items, comboBundles, shippingAddress } = body;
+
+    let idempotencyKey: string | undefined;
+    if (body.idempotencyKey !== undefined && body.idempotencyKey !== null) {
+      if (typeof body.idempotencyKey !== "string") {
+        return errorResponse("Invalid idempotency key.");
+      }
+      const trimmedKey = body.idempotencyKey.trim();
+      if (
+        trimmedKey.length < 8 ||
+        trimmedKey.length > 128 ||
+        !/^[a-zA-Z0-9_-]+$/.test(trimmedKey)
+      ) {
+        return errorResponse("Invalid idempotency key format.");
+      }
+      idempotencyKey = trimmedKey;
+    }
+
+    if (idempotencyKey) {
+      const existingOrder = await Order.findOne({
+        user: user.id,
+        idempotencyKey,
+      });
+
+      if (existingOrder) {
+        const existingOrderId = existingOrder._id.toString();
+        return NextResponse.json(
+          {
+            success: true,
+            message: "Order already created.",
+            data: existingOrder,
+            trackingEventId: generatePurchaseEventId(existingOrderId),
+          },
+          { status: 200 }
+        );
+      }
+    }
 
     // COD is the only supported payment method.
     if (
@@ -479,6 +519,7 @@ export async function POST(req: NextRequest) {
           deliveryCharge,
           totalPrice,
           isPaid: false,
+          ...(idempotencyKey ? { idempotencyKey } : {}),
           status: "Pending" as const,
         };
 
@@ -504,16 +545,86 @@ export async function POST(req: NextRequest) {
       }
     };
 
-    const createdOrder = await runWithTransactionOrFallback(
-      (session) => executeOrderCreation(session),
-      () => executeOrderCreation(undefined)
-    );
+    let createdOrder;
+    try {
+      createdOrder = await runWithTransactionOrFallback(
+        (session) => executeOrderCreation(session),
+        () => executeOrderCreation(undefined)
+      );
+    } catch (createErr: unknown) {
+      if (
+        idempotencyKey &&
+        typeof createErr === "object" &&
+        createErr !== null &&
+        "code" in createErr &&
+        (createErr as { code?: unknown }).code === 11000
+      ) {
+        const existingOrder = await Order.findOne({
+          user: user.id,
+          idempotencyKey,
+        });
+
+        if (existingOrder) {
+          const existingOrderId = existingOrder._id.toString();
+          return NextResponse.json(
+            {
+              success: true,
+              message: "Order already created.",
+              data: existingOrder,
+              trackingEventId: generatePurchaseEventId(existingOrderId),
+            },
+            { status: 200 }
+          );
+        }
+      }
+
+      throw createErr;
+    }
 
     if (!createdOrder) {
       return errorResponse(
         "Failed to create order. Please try again.",
         500
       );
+    }
+
+    // Revalidate storefront pages so updated stock counts reflect immediately
+    try {
+      revalidatePath("/");
+      revalidatePath("/products");
+      revalidatePath("/combo");
+
+      const orderedProductIds = Array.from(totalQuantities.keys());
+      for (const productId of orderedProductIds) {
+        revalidatePath(`/products/${productId}`);
+      }
+
+      const orderedProducts = await Product.find({
+        _id: { $in: orderedProductIds },
+      })
+        .select("category")
+        .lean();
+      const categoryNames = Array.from(
+        new Set(
+          orderedProducts
+            .map((p) => p.category)
+            .filter((name): name is string => Boolean(name))
+        )
+      );
+      if (categoryNames.length > 0) {
+        const categories = await Category.find({
+          name: { $in: categoryNames },
+        })
+          .select("slug")
+          .lean();
+        for (const cat of categories) {
+          if (cat.slug) {
+            revalidatePath(`/category/${cat.slug}`);
+          }
+        }
+      }
+    } catch (revalError) {
+      console.error("Order Revalidation Error:", revalError);
     }
 
     const orderIdString = createdOrder._id.toString();
@@ -614,31 +725,80 @@ export async function GET(req: NextRequest) {
     const skip = (page - 1) * limit;
 
     const isAdmin = user.role?.toLowerCase() === "admin";
+    const statusParam = searchParams.get("status")?.trim();
+    const searchParam = searchParams.get("search")?.trim();
 
-    const query = isAdmin
-      ? {}
-      : { user: user.id };
+    const baseQuery: Record<string, unknown> = isAdmin ? {} : { user: user.id };
+    const query: Record<string, unknown> = { ...baseQuery };
 
-    const [total, orders] = await Promise.all([
-      Order.countDocuments(query),
-      Order.find(query)
-        .populate("user", "name email image")
-        .populate(
-          "orderItems.product",
-          "title price images isFlashSale flashSalePrice flashSaleStart flashSaleEnd"
-        )
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-    ]);
+    if (
+      statusParam &&
+      statusParam !== "All" &&
+      ["Pending", "Processing", "Delivered", "Cancelled"].includes(statusParam)
+    ) {
+      query.status = statusParam;
+    }
 
-    const totalPages = Math.ceil(total / limit);
+    if (searchParam) {
+      const escaped = searchParam.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const orConditions: Record<string, unknown>[] = [
+        { "shippingAddress.phone": { $regex: escaped, $options: "i" } },
+      ];
+
+      if (isValidObjectId(searchParam)) {
+        orConditions.push({ _id: searchParam });
+      }
+
+      if (isAdmin) {
+        const matchingUsers = await User.find({
+          $or: [
+            { name: { $regex: escaped, $options: "i" } },
+            { email: { $regex: escaped, $options: "i" } },
+          ],
+        })
+          .select("_id")
+          .limit(50)
+          .lean();
+
+        if (matchingUsers.length > 0) {
+          orConditions.push({
+            user: { $in: matchingUsers.map((u) => u._id) },
+          });
+        }
+      }
+
+      query.$or = orConditions;
+    }
+
+    const [total, orders, totalAll, pendingOrders, completedOrders] =
+      await Promise.all([
+        Order.countDocuments(query),
+        Order.find(query)
+          .populate("user", "name email image")
+          .populate(
+            "orderItems.product",
+            "title price images isFlashSale flashSalePrice flashSaleStart flashSaleEnd"
+          )
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        Order.countDocuments(baseQuery),
+        Order.countDocuments({ ...baseQuery, status: "Pending" }),
+        Order.countDocuments({ ...baseQuery, status: "Delivered" }),
+      ]);
+
+    const totalPages = Math.max(1, Math.ceil(total / limit));
 
     return NextResponse.json(
       {
         success: true,
         data: orders,
+        stats: {
+          totalOrders: totalAll,
+          pendingOrders,
+          completedOrders,
+        },
         pagination: {
           currentPage: page,
           limit,

@@ -31,6 +31,8 @@ export default function AdminCategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [reloadTick, setReloadTick] = useState(0);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // ========================================
@@ -42,31 +44,35 @@ export default function AdminCategoriesPage() {
 
     async function loadCategories() {
       try {
+        setLoading(true);
+        setLoadError("");
+
         const response = await fetch("/api/categories", {
           method: "GET",
           cache: "no-store",
         });
 
-        const result = await response.json();
+        const result = await response.json().catch(() => null);
 
         if (!response.ok) {
           throw new Error(
-            result.message || "Failed to fetch categories"
+            result?.message || "Failed to fetch categories"
           );
         }
 
         if (active) {
-          setCategories(result.data || []);
+          setCategories(result?.data || []);
         }
       } catch (error) {
         console.error("Fetch Categories Error:", error);
 
         if (active) {
-          toast.error(
+          const message =
             error instanceof Error
               ? error.message
-              : "Failed to fetch categories"
-          );
+              : "Failed to fetch categories";
+          setLoadError(message);
+          toast.error(message);
         }
       } finally {
         if (active) {
@@ -80,7 +86,7 @@ export default function AdminCategoriesPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadTick]);
 
   // ========================================
   // Search
@@ -168,6 +174,24 @@ export default function AdminCategoriesPage() {
           <Loader2 className="h-5 w-5 animate-spin" />
           Loading categories...
         </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-6">
+        <p className="font-semibold text-red-700">Failed to load categories</p>
+        <p className="mt-1 text-sm text-red-600">{loadError}</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setReloadTick((tick) => tick + 1)}
+          className="mt-4"
+        >
+          Retry
+        </Button>
       </div>
     );
   }

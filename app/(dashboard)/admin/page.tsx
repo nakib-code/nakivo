@@ -11,6 +11,8 @@ export default function AdminDashboard() {
     data,
     isLoading,
     isError,
+    refetch,
+    isFetching,
   } = useDashboard();
 
   if (isLoading) {
@@ -23,8 +25,16 @@ export default function AdminDashboard() {
 
   if (isError || !data) {
     return (
-      <div className="p-6">
-        Failed to load dashboard.
+      <div className="rounded-xl border border-red-200 bg-red-50 p-6">
+        <p className="font-semibold text-red-700">Failed to load dashboard.</p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="mt-4 rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-800 disabled:opacity-50"
+        >
+          {isFetching ? "Retrying..." : "Retry"}
+        </button>
       </div>
     );
   }

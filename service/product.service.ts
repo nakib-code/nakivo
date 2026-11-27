@@ -7,11 +7,20 @@ import type { IProduct } from "@/types";
 
 interface GetProductsOptions {
   limit?: number;
+  page?: number;
   category?: string;
   search?: string;
   featured?: boolean;
   flashSale?: boolean;
   sort?: string;
+}
+
+export interface PaginatedProductsResult {
+  products: IProduct[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 function escapeRegex(value: string): string {
@@ -30,9 +39,9 @@ function getSortOrder(sort?: string): Record<string, 1 | -1> {
   }
 }
 
-export async function getProducts(
+export async function getProductsPaginated(
   options: GetProductsOptions = {}
-): Promise<IProduct[]> {
+): Promise<PaginatedProductsResult> {
   await connectDB();
 
   const query: Record<string, unknown> = {
@@ -73,15 +82,28 @@ export async function getProducts(
       ? Math.min(options.limit, 100)
       : 24;
 
-  const products = await Product.find(query)
-    .select(
-      "title description price category stock placement comboPrice images ratings soldCount isFeatured isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt updatedAt"
-    )
-    .sort(getSortOrder(options.sort))
-    .limit(limit)
-    .lean();
+  const page =
+    options.page !== undefined &&
+    Number.isInteger(options.page) &&
+    options.page >= 1
+      ? options.page
+      : 1;
 
-  return products.map((product) => ({
+  const skip = (page - 1) * limit;
+
+  const [total, rawProducts] = await Promise.all([
+    Product.countDocuments(query),
+    Product.find(query)
+      .select(
+        "title description price category stock placement comboPrice images ratings soldCount isFeatured isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt updatedAt"
+      )
+      .sort(getSortOrder(options.sort))
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+  ]);
+
+  const products: IProduct[] = rawProducts.map((product) => ({
     _id: String(product._id),
     title: product.title,
     description: product.description,
@@ -120,14 +142,39 @@ export async function getProducts(
       ? new Date(product.updatedAt)
       : undefined,
   }));
+
+  return {
+    products,
+    total,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  };
 }
 
+export async function getProducts(
+  options: GetProductsOptions = {}
+): Promise<IProduct[]> {
+  const result = await getProductsPaginated(options);
+  return result.products;
+}
+
+const MAX_COMBO_PRODUCTS = 200;
+
 /**
- * Fetches all in-stock combo-eligible products (`placement: "combo" | "both"`)
- * with lean fields (omitting heavy `description` from MongoDB and the RSC payload).
+ * Fetches in-stock combo-eligible products (`placement: "combo" | "both"`)
+ * with lean fields (omitting heavy `description` from MongoDB and the RSC payload)
+ * and a sensible upper bound to prevent unbounded memory/payload growth.
  */
-export async function getComboProducts(): Promise<IProduct[]> {
+export async function getComboProducts(
+  limit: number = MAX_COMBO_PRODUCTS
+): Promise<IProduct[]> {
   await connectDB();
+
+  const safeLimit =
+    Number.isInteger(limit) && limit > 0
+      ? Math.min(limit, MAX_COMBO_PRODUCTS)
+      : MAX_COMBO_PRODUCTS;
 
   const products = await Product.find({
     stock: { $gt: 0 },
@@ -137,6 +184,7 @@ export async function getComboProducts(): Promise<IProduct[]> {
       "title price category stock placement comboPrice images isFlashSale flashSalePrice flashSaleStart flashSaleEnd createdAt"
     )
     .sort({ createdAt: -1 })
+    .limit(safeLimit)
     .lean();
 
   return products.map((product) => ({

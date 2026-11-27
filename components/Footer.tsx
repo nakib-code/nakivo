@@ -8,12 +8,9 @@ import {
 } from "lucide-react";
 import { CookiePreferencesButton } from "@/components/marketing/CookieConsentBanner";
 
-const shopLinks = [
+const baseShopLinks = [
   { label: "All Products", href: "/products" },
   { label: "Combo Deals", href: "/combo" },
-  { label: "Electronics", href: "/products?category=Electronics" },
-  { label: "Fashion", href: "/products?category=Fashion" },
-  { label: "Shoes", href: "/products?category=Shoes" },
 ];
 
 const supportLinks = [
@@ -29,17 +26,31 @@ const companyLinks = [
   { label: "Contact Support", href: "/contact" },
 ];
 
+interface FooterCategory {
+  name: string;
+  slug: string;
+}
+
 interface FooterProps {
   siteName?: string;
   logoUrl?: string;
+  categories?: FooterCategory[];
 }
 
 export default function Footer({
   siteName = "NAKIVO",
   logoUrl = "",
+  categories = [],
 }: FooterProps) {
   const displayName = siteName.trim() || "NAKIVO";
   const initial = displayName.charAt(0).toUpperCase();
+  const shopLinks = [
+    ...baseShopLinks,
+    ...categories.slice(0, 3).map((cat) => ({
+      label: cat.name,
+      href: `/category/${cat.slug}`,
+    })),
+  ];
 
   return (
     <footer className="border-t border-white/10 bg-slate-950 text-white">

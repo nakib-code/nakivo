@@ -142,6 +142,21 @@ function createBundleId(): string {
   return `combo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function getBundleQuantityForProduct(
+  comboBundles: ReadonlyArray<CartComboBundle>,
+  productId: string
+): number {
+  let total = 0;
+  for (const bundle of comboBundles) {
+    for (const entry of bundle.items) {
+      if (entry.product._id === productId) {
+        total += entry.quantity;
+      }
+    }
+  }
+  return total;
+}
+
 // ========================================
 // STORE
 // ========================================
@@ -167,6 +182,12 @@ export const useCartStore =
               ? Math.floor(requestedQuantity)
               : 1;
 
+          const placement = normalizeProductPlacement(product.placement);
+
+          if (placement === "combo") {
+            return { added: false, addedQuantity: 0, reason: "invalid" };
+          }
+
           const currentCart = get().cart;
 
           const existingItem = currentCart.find(
@@ -180,15 +201,23 @@ export const useCartStore =
             return { added: false, addedQuantity: 0, reason: "out_of_stock" };
           }
 
+          const inBundlesQty = getBundleQuantityForProduct(
+            get().comboBundles,
+            product._id
+          );
+          const remainingForLoose = Math.max(0, maxOrderable - inBundlesQty);
+
           const { price, isFlashSale } = getProductPrice(product);
-          const placement = normalizeProductPlacement(product.placement);
 
           // ========================================
           // EXISTING ITEM
           // ========================================
 
           if (existingItem) {
-            const availableToAdd = Math.max(0, maxOrderable - existingItem.quantity);
+            const availableToAdd = Math.max(
+              0,
+              remainingForLoose - existingItem.quantity
+            );
 
             if (availableToAdd <= 0) {
               return { added: false, addedQuantity: 0, reason: "max_stock" };
@@ -219,7 +248,11 @@ export const useCartStore =
           // NEW ITEM
           // ========================================
 
-          const addedQuantity = Math.min(desiredQty, maxOrderable);
+          if (remainingForLoose <= 0) {
+            return { added: false, addedQuantity: 0, reason: "max_stock" };
+          }
+
+          const addedQuantity = Math.min(desiredQty, remainingForLoose);
 
           set({
             cart: [
@@ -533,7 +566,16 @@ export const useCartStore =
             return;
           }
 
-          if (quantity > getMaxOrderableQuantity(item.stock)) {
+          const inBundlesQty = getBundleQuantityForProduct(
+            get().comboBundles,
+            id
+          );
+          const maxLooseQty = Math.max(
+            0,
+            getMaxOrderableQuantity(item.stock) - inBundlesQty
+          );
+
+          if (quantity > maxLooseQty) {
             return;
           }
 
@@ -562,83 +604,53 @@ export const useCartStore =
             }
           }
 
+          // Track remaining orderable stock per product across locked bundles + loose cart
+          const remainingStock = new Map<string, number>();
+          for (const [id, fresh] of productMap.entries()) {
+            remainingStock.set(
+              id,
+              getMaxOrderableQuantity(Number(fresh.stock ?? 0))
+            );
+          }
+
           let removedCount = 0;
           let updatedCount = 0;
           let removedBundleCount = 0;
-          const nextCart: CartItem[] = [];
 
-          // 1. Sync regular loose items
-          for (const item of get().cart) {
-            const fresh = productMap.get(item._id);
-            const freshStock = getMaxOrderableQuantity(
-              Number(fresh?.stock ?? 0)
-            );
-
-            if (!fresh || freshStock <= 0) {
-              removedCount += 1;
-              continue;
-            }
-
-            const { price, isFlashSale } = getProductPrice(fresh);
-            const regularPrice = Number(fresh.price);
-            const freshPlacement = normalizeProductPlacement(fresh.placement);
-            const nextQuantity = Math.min(item.quantity, freshStock);
-            const nextImage = fresh.images?.[0]?.url || item.image || "";
-
-            const changed =
-              item.price !== price ||
-              item.regularPrice !== regularPrice ||
-              item.isFlashSale !== isFlashSale ||
-              item.stock !== freshStock ||
-              item.placement !== freshPlacement ||
-              item.quantity !== nextQuantity ||
-              item.title !== fresh.title;
-
-            if (changed) {
-              updatedCount += 1;
-            }
-
-            nextCart.push({
-              ...item,
-              title: fresh.title,
-              price,
-              regularPrice,
-              isFlashSale,
-              stock: freshStock,
-              placement: freshPlacement,
-              quantity: nextQuantity,
-              image: nextImage,
-            });
-          }
-
-          // 2. Sync locked combo bundles (remove bundle if any item is missing,
-          //    insufficient stock, or no longer combo-eligible)
+          // 1. Sync locked combo bundles first (atomic packs: keep only if every
+          //    item fits within remaining combined stock and is combo-eligible)
           const nextBundles: CartComboBundle[] = [];
 
           for (const bundle of get().comboBundles) {
             let bundleValid = true;
             let bundleChanged = false;
             let bundleTotalUnits = 0;
+            const bundleRequested = new Map<string, number>();
             const refreshedItems: CartComboBundleItem[] = [];
 
             for (const bundleItem of bundle.items) {
-              const fresh = productMap.get(bundleItem.product._id);
+              const id = bundleItem.product._id;
+              const fresh = productMap.get(id);
               const freshStock = getMaxOrderableQuantity(
                 Number(fresh?.stock ?? 0)
               );
               const freshPlacement = fresh
                 ? normalizeProductPlacement(fresh.placement)
                 : "main";
+              const neededSoFar =
+                (bundleRequested.get(id) ?? 0) + bundleItem.quantity;
+              const available = remainingStock.get(id) ?? 0;
 
               if (
                 !fresh ||
-                freshStock < bundleItem.quantity ||
+                available < neededSoFar ||
                 (freshPlacement !== "combo" && freshPlacement !== "both")
               ) {
                 bundleValid = false;
                 break;
               }
 
+              bundleRequested.set(id, neededSoFar);
               bundleTotalUnits += bundleItem.quantity;
 
               const resolved = resolveComboItemUnitPrice(fresh, {
@@ -688,6 +700,11 @@ export const useCartStore =
               continue;
             }
 
+            // Reserve stock consumed by this valid bundle
+            for (const [id, qty] of bundleRequested.entries()) {
+              remainingStock.set(id, Math.max(0, (remainingStock.get(id) ?? 0) - qty));
+            }
+
             if (bundleChanged) {
               updatedCount += 1;
             }
@@ -695,6 +712,67 @@ export const useCartStore =
             nextBundles.push({
               ...bundle,
               items: refreshedItems,
+            });
+          }
+
+          // 2. Sync regular loose items against remaining stock and placement rules.
+          //    Combo-exclusive ("combo") items cannot be ordered loosely in POST /api/orders,
+          //    so remove them here to keep client cart and server checkout aligned.
+          const nextCart: CartItem[] = [];
+
+          for (const item of get().cart) {
+            const fresh = productMap.get(item._id);
+            const freshStock = getMaxOrderableQuantity(
+              Number(fresh?.stock ?? 0)
+            );
+            const freshPlacement = fresh
+              ? normalizeProductPlacement(fresh.placement)
+              : "main";
+            const availableForLoose = remainingStock.get(item._id) ?? 0;
+
+            if (
+              !fresh ||
+              freshPlacement === "combo" ||
+              freshStock <= 0 ||
+              availableForLoose <= 0
+            ) {
+              removedCount += 1;
+              continue;
+            }
+
+            const { price, isFlashSale } = getProductPrice(fresh);
+            const regularPrice = Number(fresh.price);
+            const nextQuantity = Math.min(item.quantity, availableForLoose);
+            const nextImage = fresh.images?.[0]?.url || item.image || "";
+
+            remainingStock.set(
+              item._id,
+              Math.max(0, availableForLoose - nextQuantity)
+            );
+
+            const changed =
+              item.price !== price ||
+              item.regularPrice !== regularPrice ||
+              item.isFlashSale !== isFlashSale ||
+              item.stock !== freshStock ||
+              item.placement !== freshPlacement ||
+              item.quantity !== nextQuantity ||
+              item.title !== fresh.title;
+
+            if (changed) {
+              updatedCount += 1;
+            }
+
+            nextCart.push({
+              ...item,
+              title: fresh.title,
+              price,
+              regularPrice,
+              isFlashSale,
+              stock: freshStock,
+              placement: freshPlacement,
+              quantity: nextQuantity,
+              image: nextImage,
             });
           }
 

@@ -70,8 +70,10 @@ function ensureGtagBootstrap(consent: ConsentPreferences, consentModeV2: boolean
 
   window.dataLayer = window.dataLayer || [];
   if (typeof window.gtag !== "function") {
-    window.gtag = function gtag(...args: unknown[]) {
-      window.dataLayer?.push(args as unknown as Record<string, unknown>);
+    window.gtag = function gtag() {
+      // gtag.js requires the Arguments object (not a plain Array) in dataLayer
+      // eslint-disable-next-line prefer-rest-params
+      window.dataLayer?.push(arguments as unknown as Record<string, unknown>);
     };
   }
 

@@ -17,13 +17,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { validateComboOrderItems } from "@/lib/combo";
 import { formatBDT } from "@/lib/currency";
+import { fetchProductsByIds } from "@/lib/fetch-products-by-ids";
 import {
   trackAddToCart,
   trackRemoveFromCart,
   trackViewCart,
 } from "@/lib/marketing/tracker";
 import { useCartHydrated, useCartStore } from "@/store/useCartStore";
-import type { IProduct } from "@/types";
 
 export default function CartPage() {
   const {
@@ -89,23 +89,11 @@ export default function CartPage() {
 
     async function validateCart() {
       try {
-        const res = await fetch(
-          `/api/products?ids=${encodeURIComponent(cartIdsKey)}`,
-          { cache: "no-store" }
-        );
+        const freshProducts = await fetchProductsByIds(cartIdsKey.split(","));
 
-        if (!res.ok) {
-          return;
-        }
-
-        const json = (await res.json().catch(() => null)) as {
-          success?: boolean;
-          data?: IProduct[];
-        } | null;
-
-        if (!cancelled && json?.success && Array.isArray(json.data)) {
+        if (!cancelled && freshProducts) {
           const { removedCount, updatedCount, removedBundleCount } =
-            syncCartWithProducts(json.data);
+            syncCartWithProducts(freshProducts);
 
           if (removedBundleCount > 0) {
             toast.info(
@@ -115,7 +103,7 @@ export default function CartPage() {
             );
           } else if (removedCount > 0) {
             toast.info(
-              `${removedCount} out-of-stock or unavailable ${
+              `${removedCount} unavailable or combo-only ${
                 removedCount === 1 ? "item was" : "items were"
               } removed from your cart.`
             );

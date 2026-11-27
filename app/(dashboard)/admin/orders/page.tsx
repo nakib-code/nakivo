@@ -5,6 +5,8 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import {
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   MapPin,
   Package,
@@ -21,7 +23,7 @@ import { toast } from "sonner";
 
 import { formatBDT } from "@/lib/currency";
 import {
-  useOrders,
+  usePaginatedOrders,
   useUpdateOrderStatus,
 } from "@/hooks/useOrders";
 
@@ -33,6 +35,18 @@ const statuses = [
 ] as const;
 
 type OrderStatus = (typeof statuses)[number];
+
+const VALID_STATUS_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
+  Pending: ["Processing", "Delivered", "Cancelled"],
+  Processing: ["Delivered", "Cancelled"],
+  Delivered: [],
+  Cancelled: [],
+};
+
+function getAvailableStatusOptions(current: OrderStatus): OrderStatus[] {
+  const allowedNext = VALID_STATUS_TRANSITIONS[current] ?? [];
+  return [current, ...allowedNext];
+}
 
 type Order = {
   _id: string;
@@ -177,17 +191,45 @@ function DetailRow({
 }
 
 export default function AdminOrdersPage() {
-  const {
-    data: orders = [],
-    isLoading,
-    isError,
-  } = useOrders();
-
-  const updateStatusMutation = useUpdateOrderStatus();
-
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  const {
+    data: ordersResponse,
+    isLoading,
+    isError,
+    refetch,
+    isFetching,
+  } = usePaginatedOrders({
+    page,
+    limit: 20,
+    search: debouncedSearch || undefined,
+    status: statusFilter !== "All" ? statusFilter : undefined,
+  });
+
+  const orders = (ordersResponse?.data ?? []) as Order[];
+  const pagination = ordersResponse?.pagination ?? {
+    currentPage: page,
+    limit: 20,
+    total: orders.length,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: page > 1,
+  };
+  const totalOrdersCount = ordersResponse?.stats?.totalOrders ?? pagination.total;
+
+  const updateStatusMutation = useUpdateOrderStatus();
 
   useEffect(() => {
     if (!selectedOrder) return;
@@ -234,21 +276,7 @@ export default function AdminOrdersPage() {
     );
   };
 
-  const filteredOrders = (orders as Order[]).filter((order) => {
-    const query = search.trim().toLowerCase();
-
-    const matchesSearch =
-      !query ||
-      order._id?.toLowerCase().includes(query) ||
-      order.user?.name?.toLowerCase().includes(query) ||
-      order.user?.email?.toLowerCase().includes(query) ||
-      order.shippingAddress?.phone?.toLowerCase().includes(query);
-
-    const matchesStatus =
-      statusFilter === "All" || order.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
-  });
+  const filteredOrders = orders;
 
   const getOrderTotals = (order: Order) => {
     const deliveryCharge = Number(order.deliveryCharge ?? 0);
@@ -327,6 +355,15 @@ export default function AdminOrdersPage() {
         <p className="mt-1 text-sm text-red-600">
           Please refresh the page or try again later.
         </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-800 disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+          Retry
+        </button>
       </div>
     );
   }
@@ -358,7 +395,7 @@ export default function AdminOrdersPage() {
             Total orders
           </span>
           <span className="font-bold tabular-nums">
-            {orders.length}
+            {totalOrdersCount}
           </span>
         </div>
       </div>
@@ -377,7 +414,10 @@ export default function AdminOrdersPage() {
 
         <select
           value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value)}
+          onChange={(event) => {
+            setStatusFilter(event.target.value);
+            setPage(1);
+          }}
           aria-label="Filter orders by status"
           className="h-11 rounded-xl border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
         >
@@ -401,7 +441,7 @@ export default function AdminOrdersPage() {
           </div>
 
           <span className="shrink-0 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium">
-            {filteredOrders.length} results
+            {pagination.total} results
           </span>
         </div>
 
@@ -486,7 +526,10 @@ export default function AdminOrdersPage() {
                     >
                       <select
                         value={order.status}
-                        disabled={updateStatusMutation.isPending}
+                        disabled={
+                          updateStatusMutation.isPending ||
+                          (VALID_STATUS_TRANSITIONS[order.status]?.length ?? 0) === 0
+                        }
                         onChange={(event) =>
                           handleStatusChange(
                             order._id,
@@ -494,9 +537,9 @@ export default function AdminOrdersPage() {
                           )
                         }
                         aria-label={`Update status for order ${order._id}`}
-                        className="max-w-36 rounded-lg border bg-background px-2.5 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                        className="max-w-36 rounded-lg border bg-background px-2.5 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {statuses.map((status) => (
+                        {getAvailableStatusOptions(order.status).map((status) => (
                           <option key={status} value={status}>
                             {status}
                           </option>
@@ -524,10 +567,34 @@ export default function AdminOrdersPage() {
           </div>
         )}
 
-        <div className="border-t bg-muted/20 px-5 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-muted/20 px-5 py-3">
           <p className="text-xs text-muted-foreground">
-            Showing {filteredOrders.length} of {orders.length} orders
+            Page {pagination.currentPage} of {pagination.totalPages} · Showing{" "}
+            {filteredOrders.length} of {pagination.total} orders
           </p>
+
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={!pagination.hasPreviousPage || isFetching}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="inline-flex items-center gap-1 rounded-lg border bg-background px-3 py-1.5 text-xs font-medium transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                Previous
+              </button>
+              <button
+                type="button"
+                disabled={!pagination.hasNextPage || isFetching}
+                onClick={() => setPage((p) => p + 1)}
+                className="inline-flex items-center gap-1 rounded-lg border bg-background px-3 py-1.5 text-xs font-medium transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -797,7 +864,10 @@ export default function AdminOrdersPage() {
 
                 <select
                   value={selectedOrder.status}
-                  disabled={updateStatusMutation.isPending}
+                  disabled={
+                    updateStatusMutation.isPending ||
+                    (VALID_STATUS_TRANSITIONS[selectedOrder.status]?.length ?? 0) === 0
+                  }
                   onChange={(event) =>
                     handleStatusChange(
                       selectedOrder._id,
@@ -805,9 +875,9 @@ export default function AdminOrdersPage() {
                     )
                   }
                   aria-label="Update selected order status"
-                  className="h-10 rounded-xl border bg-background px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                  className="h-10 rounded-xl border bg-background px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {statuses.map((status) => (
+                  {getAvailableStatusOptions(selectedOrder.status).map((status) => (
                     <option key={status} value={status}>
                       {status}
                     </option>

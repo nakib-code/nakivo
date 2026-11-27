@@ -7,6 +7,8 @@ cloudinary.config({
   api_secret: env.CLOUDINARY_API_SECRET,
 });
 
+const MAX_CLOUDINARY_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB defensive ceiling
+
 export async function uploadToCloudinary(
   file: File,
   folder = "ecommerce/products"
@@ -15,6 +17,14 @@ export async function uploadToCloudinary(
   public_id: string;
 }> {
   try {
+    if (file.size <= 0) {
+      throw new Error("Uploaded file is empty");
+    }
+
+    if (file.size > MAX_CLOUDINARY_UPLOAD_BYTES) {
+      throw new Error("Uploaded file exceeds the maximum allowed size of 10MB");
+    }
+
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 

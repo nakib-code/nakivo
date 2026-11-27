@@ -223,7 +223,7 @@ export const cookieConsentSettingsSchema = z.object({
     .max(200)
     .refine(
       (val) =>
-        val.startsWith("/") ||
+        (val.startsWith("/") && !val.startsWith("//")) ||
         val.startsWith("https://") ||
         val.startsWith("http://"),
       "Privacy policy URL must be a relative path (e.g. /privacy) or http(s) URL"
@@ -279,15 +279,33 @@ export const ecommerceItemSchema = z.object({
   item_list_name: z.string().trim().max(120).optional(),
 });
 
+export const CLIENT_RELAY_EVENT_NAMES = TRACKING_EVENT_NAMES.filter(
+  (name): name is Exclude<(typeof TRACKING_EVENT_NAMES)[number], "purchase" | "sign_up"> =>
+    name !== "purchase" && name !== "sign_up"
+) as unknown as readonly [
+  "page_view",
+  "view_item",
+  "view_item_list",
+  "search",
+  "add_to_cart",
+  "remove_from_cart",
+  "view_cart",
+  "begin_checkout",
+  "add_payment_info",
+  "login",
+];
+
 export const clientEventRelaySchema = z.object({
-  eventName: z.enum(TRACKING_EVENT_NAMES),
+  eventName: z.enum(CLIENT_RELAY_EVENT_NAMES),
   eventId: z.string().trim().min(6).max(120),
   eventSourceUrl: z.string().trim().max(1000).optional(),
   path: z.string().trim().max(500).optional(),
-  consent: z.object({
-    analytics: z.boolean(),
-    marketing: z.boolean(),
-  }),
+  consent: z
+    .object({
+      analytics: z.boolean(),
+      marketing: z.boolean(),
+    })
+    .optional(),
   payload: z
     .object({
       currency: z.string().trim().toUpperCase().regex(CURRENCY_CODE_REGEX).optional(),

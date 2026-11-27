@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import ProductListing from "@/components/products/ProductListing";
-import { getProducts } from "@/service/product.service";
+import { getProductsPaginated } from "@/service/product.service";
 
 export const metadata: Metadata = {
   title: "Shop All Products",
@@ -14,6 +14,7 @@ interface ProductsPageProps {
     search?: string;
     category?: string;
     sort?: string;
+    page?: string;
   }>;
 }
 
@@ -21,11 +22,17 @@ export default async function ProductsPage({
   searchParams,
 }: ProductsPageProps) {
   const params = await searchParams;
+  const parsedPage = Number(params.page);
+  const currentPage =
+    Number.isFinite(parsedPage) && parsedPage >= 1
+      ? Math.floor(parsedPage)
+      : 1;
 
-  const products = await getProducts({
+  const { products, total, page, totalPages } = await getProductsPaginated({
     search: params.search,
     category: params.category,
     sort: params.sort,
+    page: currentPage,
     limit: 24,
   });
 
@@ -47,6 +54,11 @@ export default async function ProductsPage({
         initialSearch={params.search || ""}
         initialCategory={params.category || "all"}
         initialSort={params.sort || "default"}
+        pagination={{
+          page,
+          total,
+          totalPages,
+        }}
       />
     </div>
   );

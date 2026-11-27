@@ -46,6 +46,7 @@ export async function GET() {
       {
         $match: {
           isPaid: true,
+          status: { $ne: "Cancelled" },
         },
       },
       {
@@ -104,6 +105,7 @@ export async function GET() {
       {
         $match: {
           isPaid: true,
+          status: { $ne: "Cancelled" },
           createdAt: {
             $gte: yearStart,
             $lt: nextYearStart,

@@ -1,9 +1,13 @@
+import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { isValidObjectId } from "mongoose";
 
 import connectDB from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
+import Category from "@/models/Category";
+import Product from "@/models/Product";
 import {
+  aggregateOrderItemQuantities,
   isValidOrderStatus,
   OrderServiceError,
   updateOrderStatus,
@@ -127,6 +131,50 @@ export async function PATCH(
     const order = await updateOrderStatus(id, status, {
       populateUser: true,
     });
+
+    if (status === "Cancelled" || status === "Delivered") {
+      try {
+        revalidatePath("/");
+        revalidatePath("/products");
+        revalidatePath("/combo");
+
+        const productIds = Array.from(
+          aggregateOrderItemQuantities(order.orderItems).keys()
+        );
+        for (const productId of productIds) {
+          revalidatePath(`/products/${productId}`);
+        }
+
+        if (productIds.length > 0) {
+          const affectedProducts = await Product.find({
+            _id: { $in: productIds },
+          })
+            .select("category")
+            .lean();
+          const categoryNames = Array.from(
+            new Set(
+              affectedProducts
+                .map((p) => p.category)
+                .filter((name): name is string => Boolean(name))
+            )
+          );
+          if (categoryNames.length > 0) {
+            const categories = await Category.find({
+              name: { $in: categoryNames },
+            })
+              .select("slug")
+              .lean();
+            for (const cat of categories) {
+              if (cat.slug) {
+                revalidatePath(`/category/${cat.slug}`);
+              }
+            }
+          }
+        }
+      } catch (revalError) {
+        console.error("Admin Order Status Revalidation Error:", revalError);
+      }
+    }
 
     // ========================================
     // Response

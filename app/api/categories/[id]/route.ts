@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import { deleteFromCloudinary } from "@/lib/cloudinary";
 import connectDB from "@/lib/db";
 import Category from "@/models/Category";
+import Product from "@/models/Product";
 import { createCategorySlug } from "@/service/category/category.service";
 
 function isValidImageUrl(value: string): boolean {
@@ -160,10 +161,23 @@ export async function PATCH(
       );
     }
 
+    const existingCategory = await Category.findById(id).lean();
+
+    if (!existingCategory) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Category not found",
+        },
+        { status: 404 }
+      );
+    }
+
     const updateData: {
       name?: string;
       description?: string;
       image?: string;
+      imagePublicId?: string;
       slug?: string;
     } = {};
 
@@ -196,6 +210,8 @@ export async function PATCH(
       updateData.description = description.trim();
     }
 
+    let oldImagePublicIdToDelete = "";
+
     if (image !== undefined) {
       if (typeof image !== "string" || !isValidImageUrl(image.trim())) {
         return NextResponse.json(
@@ -207,7 +223,16 @@ export async function PATCH(
         );
       }
 
-      updateData.image = image.trim();
+      const nextImage = image.trim();
+      updateData.image = nextImage;
+
+      if (
+        existingCategory.imagePublicId &&
+        nextImage !== existingCategory.image
+      ) {
+        updateData.imagePublicId = "";
+        oldImagePublicIdToDelete = existingCategory.imagePublicId;
+      }
     }
 
     const category = await Category.findByIdAndUpdate(
@@ -229,8 +254,31 @@ export async function PATCH(
       );
     }
 
+    // Cascade product category name updates when a category is renamed
+    if (updateData.name && existingCategory.name !== category.name) {
+      await Product.updateMany(
+        { category: existingCategory.name },
+        { $set: { category: category.name } }
+      );
+    }
+
+    // Clean up replaced Cloudinary asset only after DB update succeeds
+    if (oldImagePublicIdToDelete) {
+      await deleteFromCloudinary(oldImagePublicIdToDelete).catch(
+        (cleanupError) =>
+          console.error(
+            "Category old Cloudinary delete error:",
+            cleanupError
+          )
+      );
+    }
+
     revalidatePath("/");
     revalidatePath("/products");
+    revalidatePath("/combo");
+    if (existingCategory.slug && existingCategory.slug !== category.slug) {
+      revalidatePath(`/category/${existingCategory.slug}`);
+    }
     revalidatePath(`/category/${category.slug}`);
 
     return NextResponse.json(

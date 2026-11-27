@@ -99,6 +99,13 @@ const OrderSchema: Schema<IOrder> = new Schema(
       default: false,
     },
 
+    // Optional client-generated idempotency key to prevent duplicate submissions
+    idempotencyKey: {
+      type: String,
+      trim: true,
+      maxlength: 128,
+    },
+
     // Order Status
     status: {
       type: String,
@@ -118,6 +125,7 @@ const OrderSchema: Schema<IOrder> = new Schema(
 );
 
 OrderSchema.index({ user: 1, createdAt: -1 });
+OrderSchema.index({ user: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
 OrderSchema.index({ status: 1, createdAt: -1 });
 OrderSchema.index({ isPaid: 1, createdAt: -1 });
 

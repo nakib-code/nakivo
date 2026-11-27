@@ -7,6 +7,7 @@ import { env } from "@/lib/env";
 import {
   findOrCreateGoogleUser,
   getUserByEmail,
+  getUserById,
   validateCredentials,
 } from "@/service/auth.service";
 
@@ -90,6 +91,13 @@ export const authOptions: NextAuthOptions = {
       } catch (error) {
         console.error("Google Sign In Error:", error);
 
+        if (
+          error instanceof Error &&
+          error.message === "OAuthAccountNotLinked"
+        ) {
+          return "/login?error=OAuthAccountNotLinked";
+        }
+
         return false;
       }
     },
@@ -133,6 +141,9 @@ export const authOptions: NextAuthOptions = {
           token.lastSyncedAt = Date.now();
         } catch (error) {
           console.error("JWT Callback Error:", error);
+          // Fail closed on DB errors so stale privileged claims are never trusted
+          token.status = "blocked";
+          token.role = undefined;
         }
       }
 
@@ -183,7 +194,7 @@ export const authOptions: NextAuthOptions = {
 };
 
 // ======================================================
-// Get Current Logged-in User
+// Get Current Logged-in User (Live DB Verified, Fail-Closed)
 // ======================================================
 
 export async function getCurrentUser() {
@@ -193,7 +204,30 @@ export async function getCurrentUser() {
     return null;
   }
 
-  return session.user;
+  try {
+    const dbUser = session.user.id
+      ? await getUserById(session.user.id)
+      : session.user.email
+        ? await getUserByEmail(session.user.email)
+        : null;
+
+    if (!dbUser || dbUser.status !== "active") {
+      return null;
+    }
+
+    return {
+      ...session.user,
+      id: dbUser._id.toString(),
+      name: dbUser.name,
+      email: dbUser.email,
+      image: dbUser.image ?? session.user.image,
+      role: dbUser.role,
+      status: dbUser.status,
+    };
+  } catch (error) {
+    console.error("getCurrentUser DB Verification Error:", error);
+    return null;
+  }
 }
 
 // ======================================================
@@ -212,7 +246,7 @@ export async function requireAdmin() {
     };
   }
 
-  if (user.role !== "admin") {
+  if (user.role !== "admin" || user.status !== "active") {
     return {
       authorized: false as const,
       status: 403,

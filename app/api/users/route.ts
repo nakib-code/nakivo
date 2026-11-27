@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
         : 50;
     const skip = (page - 1) * limit;
 
-    const [total, users] = await Promise.all([
+    const [total, users, customerCount, adminCount] = await Promise.all([
       User.countDocuments(),
       User.find()
         .select("-password")
@@ -54,14 +54,21 @@ export async function GET(req: NextRequest) {
         .skip(skip)
         .limit(limit)
         .lean(),
+      User.countDocuments({ role: "customer" }),
+      User.countDocuments({ role: "admin" }),
     ]);
 
-    const totalPages = Math.ceil(total / limit);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
 
     return NextResponse.json(
       {
         success: true,
         data: users,
+        stats: {
+          totalUsers: total,
+          customers: customerCount,
+          admins: adminCount,
+        },
         pagination: {
           currentPage: page,
           limit,

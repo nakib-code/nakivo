@@ -7,33 +7,38 @@ import {
   Clock,
   CheckCircle,
   ArrowRight,
+  RefreshCw,
 } from "lucide-react";
 
-import { useOrders } from "@/hooks/useOrders";
+import { usePaginatedOrders } from "@/hooks/useOrders";
 import { formatBDT } from "@/lib/currency";
 
 import { Button } from "@/components/ui/button";
 
 export default function UserDashboardPage() {
   const {
-    data: orders = [],
+    data: ordersResponse,
     isLoading,
     isError,
-  } = useOrders();
+    refetch,
+    isFetching,
+  } = usePaginatedOrders({ page: 1, limit: 5 });
+
+  const orders = ordersResponse?.data ?? [];
 
   // ==================================================
   // Stats
   // ==================================================
 
-  const totalOrders = orders.length;
+  const totalOrders = ordersResponse?.stats?.totalOrders ?? orders.length;
 
-  const pendingOrders = orders.filter(
-    (order) => order.status === "Pending"
-  ).length;
+  const pendingOrders =
+    ordersResponse?.stats?.pendingOrders ??
+    orders.filter((order) => order.status === "Pending").length;
 
-  const completedOrders = orders.filter(
-    (order) => order.status === "Delivered"
-  ).length;
+  const completedOrders =
+    ordersResponse?.stats?.completedOrders ??
+    orders.filter((order) => order.status === "Delivered").length;
 
   const stats = [
     {
@@ -118,15 +123,25 @@ export default function UserDashboardPage() {
             Please try again later.
           </p>
 
-          <Button
-            asChild
-            variant="outline"
-            className="mt-5"
-          >
-            <Link href="/products">
-              Continue Shopping
-            </Link>
-          </Button>
+          <div className="mt-5 flex flex-wrap justify-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => refetch()}
+              disabled={isFetching}
+            >
+              <RefreshCw
+                className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`}
+              />
+              Try Again
+            </Button>
+
+            <Button asChild variant="outline">
+              <Link href="/products">
+                Continue Shopping
+              </Link>
+            </Button>
+          </div>
         </div>
       </div>
     );

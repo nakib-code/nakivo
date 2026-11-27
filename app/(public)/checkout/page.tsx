@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { validateComboOrderItems } from "@/lib/combo";
 import { formatBDT } from "@/lib/currency";
+import { fetchProductsByIds } from "@/lib/fetch-products-by-ids";
 import { isValidPhoneNumber } from "@/lib/order-validation";
 import {
   trackAddPaymentInfo,
@@ -22,8 +23,17 @@ import {
 } from "@/lib/delivery";
 import { useCartHydrated, useCartStore } from "@/store/useCartStore";
 import { useCreateOrder } from "@/hooks/useOrders";
-import type { IProduct } from "@/types";
 import type { CreateOrderPayload, DeliveryArea } from "@/types/order";
+
+function generateIdempotencyKey(): string {
+  if (
+    typeof globalThis.crypto !== "undefined" &&
+    typeof globalThis.crypto.randomUUID === "function"
+  ) {
+    return `ord_${globalThis.crypto.randomUUID().replace(/-/g, "")}`;
+  }
+  return `ord_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -62,6 +72,8 @@ export default function CheckoutPage() {
   const [settingsError, setSettingsError] = useState(false);
   const [settingsRetryCount, setSettingsRetryCount] = useState(0);
   const beginCheckoutTrackedRef = useRef(false);
+  const idempotencyKeyRef = useRef<string | null>(null);
+  const lastFingerprintRef = useRef<string>("");
 
   // Track begin_checkout once when authenticated checkout loads with items
   useEffect(() => {
@@ -150,23 +162,11 @@ export default function CheckoutPage() {
 
     async function validateCart() {
       try {
-        const res = await fetch(
-          `/api/products?ids=${encodeURIComponent(cartIdsKey)}`,
-          { cache: "no-store" }
-        );
+        const freshProducts = await fetchProductsByIds(cartIdsKey.split(","));
 
-        if (!res.ok) {
-          return;
-        }
-
-        const json = (await res.json().catch(() => null)) as {
-          success?: boolean;
-          data?: IProduct[];
-        } | null;
-
-        if (!cancelled && json?.success && Array.isArray(json.data)) {
+        if (!cancelled && freshProducts) {
           const { removedCount, updatedCount, removedBundleCount } =
-            syncCartWithProducts(json.data);
+            syncCartWithProducts(freshProducts);
 
           if (removedBundleCount > 0) {
             toast.info(
@@ -176,7 +176,7 @@ export default function CheckoutPage() {
             );
           } else if (removedCount > 0) {
             toast.info(
-              `${removedCount} out-of-stock or unavailable ${
+              `${removedCount} unavailable or combo-only ${
                 removedCount === 1 ? "item was" : "items were"
               } removed from your cart.`
             );
@@ -298,6 +298,25 @@ export default function CheckoutPage() {
 
     trackAddPaymentInfo(checkoutItemsSnapshot, total, "COD");
 
+    const currentFingerprint = JSON.stringify({
+      items: activeCart.map((item) => [item._id, item.quantity]),
+      bundles: activeComboBundles.map((b) =>
+        b.items.map((e) => [e.product._id, e.quantity])
+      ),
+      address: shipping.address.trim(),
+      city: shipping.city.trim(),
+      phone: shipping.phone.trim(),
+      deliveryArea,
+    });
+
+    if (
+      !idempotencyKeyRef.current ||
+      lastFingerprintRef.current !== currentFingerprint
+    ) {
+      lastFingerprintRef.current = currentFingerprint;
+      idempotencyKeyRef.current = generateIdempotencyKey();
+    }
+
     const payload: CreateOrderPayload = {
       items: activeCart.map((item) => ({
         product: item._id,
@@ -321,6 +340,7 @@ export default function CheckoutPage() {
         deliveryArea,
       },
       paymentMethod: "COD",
+      idempotencyKey: idempotencyKeyRef.current,
     };
 
     createOrderMutation.mutate(payload, {
@@ -358,6 +378,8 @@ export default function CheckoutPage() {
         });
 
         toast.success("Order placed successfully!");
+        idempotencyKeyRef.current = null;
+        lastFingerprintRef.current = "";
         clearCart();
         const isAdmin = session?.user?.role === "admin";
         router.push(isAdmin ? "/admin/orders" : `/user/orders/${order._id}`);

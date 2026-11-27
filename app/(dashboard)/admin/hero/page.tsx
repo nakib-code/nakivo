@@ -57,6 +57,8 @@ function sortBanners(list: HeroBanner[]): HeroBanner[] {
 export default function HeroListPage() {
   const [heroes, setHeroes] = useState<HeroBanner[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [reloadTick, setReloadTick] = useState(0);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
@@ -89,24 +91,28 @@ export default function HeroListPage() {
 
     async function loadHeroes() {
       try {
+        setLoading(true);
+        setLoadError("");
+
         const res = await fetch("/api/admin/hero", {
           cache: "no-store",
         });
 
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
 
         if (!res.ok) {
-          throw new Error(data.message || "Failed to load heroes");
+          throw new Error(data?.message || "Failed to load heroes");
         }
 
         if (active) {
-          setHeroes(sortBanners(Array.isArray(data.data) ? data.data : []));
+          setHeroes(sortBanners(Array.isArray(data?.data) ? data.data : []));
         }
       } catch (error) {
         if (active) {
-          toast.error(
-            error instanceof Error ? error.message : "Failed to load heroes",
-          );
+          const message =
+            error instanceof Error ? error.message : "Failed to load heroes";
+          setLoadError(message);
+          toast.error(message);
         }
       } finally {
         if (active) {
@@ -120,7 +126,7 @@ export default function HeroListPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadTick]);
 
   // =========================
   // Open Edit Modal
@@ -316,6 +322,24 @@ export default function HeroListPage() {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-6">
+        <p className="font-semibold text-red-700">Failed to load hero banners</p>
+        <p className="mt-1 text-sm text-red-600">{loadError}</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setReloadTick((tick) => tick + 1)}
+          className="mt-4"
+        >
+          Retry
+        </Button>
       </div>
     );
   }

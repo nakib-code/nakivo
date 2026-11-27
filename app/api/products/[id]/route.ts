@@ -5,8 +5,29 @@ import mongoose from "mongoose";
 import { requireAdmin } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import { isValidProductPlacement } from "@/lib/product-placement";
+import Category from "@/models/Category";
 import Product from "@/models/Product";
 import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary";
+
+async function revalidateCategorySlugs(categoryNames: Array<string | undefined>) {
+  const uniqueNames = Array.from(
+    new Set(categoryNames.map((n) => n?.trim()).filter((n): n is string => Boolean(n)))
+  );
+  if (uniqueNames.length === 0) return;
+
+  try {
+    const categories = await Category.find({ name: { $in: uniqueNames } })
+      .select("slug")
+      .lean();
+    for (const cat of categories) {
+      if (cat.slug) {
+        revalidatePath(`/category/${cat.slug}`);
+      }
+    }
+  } catch (err) {
+    console.error("Category slug revalidation error:", err);
+  }
+}
 
 interface RouteParams {
   params: Promise<{
@@ -524,6 +545,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     revalidatePath("/products");
     revalidatePath("/combo");
     revalidatePath(`/products/${id}`);
+    await revalidateCategorySlugs([product.category, updatedProduct?.category]);
 
     return NextResponse.json(
       {
@@ -612,6 +634,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     revalidatePath("/products");
     revalidatePath("/combo");
     revalidatePath(`/products/${id}`);
+    await revalidateCategorySlugs([product.category]);
 
     return NextResponse.json(
       {
@@ -759,15 +782,21 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         setFields.placement = body.placement;
       }
 
+      const unsetFields: Record<string, 1> = {
+        flashSalePrice: 1,
+        flashSaleStart: 1,
+        flashSaleEnd: 1,
+      };
+
+      if (body.placement === "main") {
+        unsetFields.comboPrice = 1;
+      }
+
       const updatedProduct = await Product.findByIdAndUpdate(
         id,
         {
           $set: setFields,
-          $unset: {
-            flashSalePrice: 1,
-            flashSaleStart: 1,
-            flashSaleEnd: 1,
-          },
+          $unset: unsetFields,
         },
         {
           new: true,
@@ -779,6 +808,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       revalidatePath("/products");
       revalidatePath("/combo");
       revalidatePath(`/products/${id}`);
+      await revalidateCategorySlugs([product.category]);
 
       return NextResponse.json(
         {
@@ -862,12 +892,17 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       product.flashSaleEnd = flashSaleEnd;
     }
 
+    if (body.placement === "main") {
+      product.set("comboPrice", undefined, { strict: false });
+    }
+
     await product.save();
 
     revalidatePath("/");
     revalidatePath("/products");
     revalidatePath("/combo");
     revalidatePath(`/products/${id}`);
+    await revalidateCategorySlugs([product.category]);
 
     return NextResponse.json(
       {

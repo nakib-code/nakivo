@@ -49,7 +49,9 @@ export default function LoginForm() {
   const [isPending, startTransition] = useTransition();
 
   const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl"));
-  const isBlockedError = searchParams.get("error") === "blocked";
+  const errorParam = searchParams.get("error");
+  const isBlockedError = errorParam === "blocked";
+  const isOAuthLinkError = errorParam === "OAuthAccountNotLinked";
 
   const {
     register,
@@ -111,6 +113,16 @@ export default function LoginForm() {
           >
             Your account has been suspended. Please contact support for
             assistance.
+          </div>
+        )}
+
+        {isOAuthLinkError && (
+          <div
+            role="alert"
+            className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+          >
+            An account with this email already exists with email &amp; password.
+            Please sign in using your email and password.
           </div>
         )}
 

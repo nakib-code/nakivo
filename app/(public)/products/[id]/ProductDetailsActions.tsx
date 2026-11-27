@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { formatBDT } from "@/lib/currency";
 import { trackAddToCart } from "@/lib/marketing/tracker";
+import { getMaxOrderableQuantity } from "@/lib/order-validation";
 import { useCartStore } from "@/store/useCartStore";
 import { IProduct } from "@/types";
 
@@ -48,8 +49,10 @@ export default function ProductDetailsActions({
   // Quantity
   // =========================
 
+  const maxOrderable = getMaxOrderableQuantity(Number(product.stock ?? 0));
+
   const increaseQuantity = () => {
-    if (quantity < product.stock) {
+    if (quantity < maxOrderable) {
       setQuantity((prev) => prev + 1);
     }
   };
@@ -233,7 +236,7 @@ export default function ProductDetailsActions({
             size="icon"
             aria-label="Increase quantity"
             onClick={increaseQuantity}
-            disabled={quantity >= product.stock}
+            disabled={quantity >= maxOrderable}
           >
             <Plus className="h-4 w-4" />
           </Button>

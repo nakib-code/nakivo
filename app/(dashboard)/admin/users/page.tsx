@@ -5,7 +5,10 @@ import Image from "next/image";
 import { useSession } from "next-auth/react";
 
 import {
+  ChevronLeft,
+  ChevronRight,
   Loader2,
+  RefreshCw,
   ShieldCheck,
   User,
   UserX,
@@ -15,7 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 import {
-  useGetUsers,
+  usePaginatedUsers,
   useUpdateUser,
   useDeleteUser,
 } from "@/hooks/useUsers";
@@ -24,12 +27,30 @@ export default function AdminUsersPage() {
   const { data: session } = useSession();
   const currentUserId = session?.user?.id ?? "";
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const {
-    data: users = [],
+    data: usersResponse,
     isLoading,
     isError,
-  } = useGetUsers();
+    refetch,
+    isFetching,
+  } = usePaginatedUsers({ page, limit: 20 });
+
+  const users = usersResponse?.data ?? [];
+  const pagination = usersResponse?.pagination ?? {
+    currentPage: page,
+    limit: 20,
+    total: users.length,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: page > 1,
+  };
+  const stats = usersResponse?.stats ?? {
+    totalUsers: users.length,
+    customers: users.filter((u) => u.role === "customer").length,
+    admins: users.filter((u) => u.role === "admin").length,
+  };
 
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
@@ -133,21 +154,20 @@ export default function AdminUsersPage() {
 
 
   if(isError){
-
     return (
-
-      <div className="
-        rounded-xl
-        border
-        p-6
-      ">
-
-        Failed to load users
-
+      <div className="rounded-xl border border-red-200 bg-red-50 p-6">
+        <p className="font-semibold text-red-700">Failed to load users</p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-800 disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+          Retry
+        </button>
       </div>
-
     );
-
   }
 
 
@@ -215,7 +235,7 @@ export default function AdminUsersPage() {
             text-2xl
             font-bold
           ">
-            {users.length}
+            {stats.totalUsers}
           </p>
 
         </div>
@@ -242,14 +262,7 @@ export default function AdminUsersPage() {
             text-2xl
             font-bold
           ">
-
-            {
-              users.filter(
-                user =>
-                user.role === "customer"
-              ).length
-            }
-
+            {stats.customers}
           </p>
 
         </div>
@@ -276,14 +289,7 @@ export default function AdminUsersPage() {
             text-2xl
             font-bold
           ">
-
-            {
-              users.filter(
-                user =>
-                user.role === "admin"
-              ).length
-            }
-
+            {stats.admins}
           </p>
 
         </div>
@@ -677,6 +683,33 @@ export default function AdminUsersPage() {
 
         </div>
 
+        {pagination.totalPages > 1 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-slate-50 px-5 py-3 text-xs text-slate-600">
+            <span>
+              Page {pagination.currentPage} of {pagination.totalPages} ({pagination.total} users)
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={!pagination.hasPreviousPage || isFetching}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="inline-flex items-center gap-1 rounded-lg border bg-white px-3 py-1.5 font-medium transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                Previous
+              </button>
+              <button
+                type="button"
+                disabled={!pagination.hasNextPage || isFetching}
+                onClick={() => setPage((p) => p + 1)}
+                className="inline-flex items-center gap-1 rounded-lg border bg-white px-3 py-1.5 font-medium transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
 

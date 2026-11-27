@@ -126,6 +126,17 @@ describe("Marketing Validation & Security", () => {
       }).success,
       false
     );
+
+    // Reject protocol-relative privacy policy URLs
+    assert.equal(
+      marketingSettingsUpdateSchema.safeParse({
+        cookieConsent: {
+          ...DEFAULT_MARKETING_SETTINGS.cookieConsent,
+          privacyPolicyUrl: "//evil.example/phish",
+        },
+      }).success,
+      false
+    );
   });
 
   it("strips server-only Meta CAPI fields from PublicMarketingConfig", () => {
@@ -175,6 +186,23 @@ describe("Marketing Validation & Security", () => {
       consent: { analytics: true, marketing: true },
     });
     assert.equal(invalid.success, false);
+
+    // Server-authoritative events must be rejected on the public client relay
+    assert.equal(
+      clientEventRelaySchema.safeParse({
+        eventName: "purchase",
+        eventId: "purchase_forged_12345",
+        payload: { currency: "BDT", value: 999999 },
+      }).success,
+      false
+    );
+    assert.equal(
+      clientEventRelaySchema.safeParse({
+        eventName: "sign_up",
+        eventId: "signup_forged_12345",
+      }).success,
+      false
+    );
   });
 });
 

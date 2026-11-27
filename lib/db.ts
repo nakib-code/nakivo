@@ -16,7 +16,16 @@ declare global {
 const cached = global.mongooseCache ?? (global.mongooseCache = { conn: null, promise: null });
 
 async function connectDB(): Promise<typeof mongoose> {
-  if (cached.conn) return cached.conn;
+  const readyState = mongoose.connection.readyState;
+
+  if (cached.conn && readyState === 1) {
+    return cached.conn;
+  }
+
+  if (readyState === 0 || readyState === 3) {
+    cached.conn = null;
+    cached.promise = null;
+  }
 
   if (!cached.promise) {
     cached.promise = mongoose.connect(MONGODB_URI!, { bufferCommands: false });
@@ -25,6 +34,7 @@ async function connectDB(): Promise<typeof mongoose> {
   try {
     cached.conn = await cached.promise;
   } catch (e) {
+    cached.conn = null;
     cached.promise = null;
     throw e;
   }

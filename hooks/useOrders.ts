@@ -8,8 +8,11 @@ import {
 
 import {
   getOrders,
+  getOrdersPaginated,
   createOrder,
   type CreateOrderApiResponse,
+  type GetOrdersParams,
+  type PaginatedOrdersResponse,
 } from "@/service/order/order.api";
 
 import type {
@@ -46,6 +49,13 @@ export function useOrders() {
     queryKey: ["orders"],
 
     queryFn: getOrders,
+  });
+}
+
+export function usePaginatedOrders(params: GetOrdersParams = {}) {
+  return useQuery<PaginatedOrdersResponse, Error>({
+    queryKey: ["orders", "paginated", params],
+    queryFn: () => getOrdersPaginated(params),
   });
 }
 

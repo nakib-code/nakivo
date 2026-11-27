@@ -4,6 +4,7 @@ import {
   ChangeEvent,
   FormEvent,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -46,6 +47,12 @@ interface Category {
 
 const MAX_IMAGES = 5;
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+]);
 
 export default function CreateProductPage() {
   const router = useRouter();
@@ -82,6 +89,17 @@ export default function CreateProductPage() {
   const [previews, setPreviews] = useState<string[]>(
     []
   );
+  const previewsRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    previewsRef.current = previews;
+  }, [previews]);
+
+  useEffect(() => {
+    return () => {
+      previewsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   // =========================
   // Submit
@@ -165,9 +183,9 @@ export default function CreateProductPage() {
     }
 
     for (const file of files) {
-      if (!file.type.startsWith("image/")) {
+      if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
         toast.error(
-          `${file.name} is not a valid image.`
+          `${file.name} must be a JPG, PNG, WebP, or AVIF image.`
         );
 
         event.target.value = "";
@@ -257,11 +275,11 @@ export default function CreateProductPage() {
 
     if (
       !price ||
-      Number.isNaN(Number(price)) ||
-      Number(price) < 0
+      !Number.isFinite(Number(price)) ||
+      Number(price) <= 0
     ) {
       toast.error(
-        "Please enter a valid price."
+        "Please enter a valid price greater than 0."
       );
       return;
     }
@@ -714,13 +732,14 @@ export default function CreateProductPage() {
 
                         <button
                           type="button"
+                          aria-label={`Remove image ${index + 1}`}
                           disabled={submitting}
                           onClick={() =>
                             removeImage(
                               index
                             )
                           }
-                          className="absolute right-2 top-2 rounded-full bg-red-600 p-2 text-white opacity-0 shadow transition group-hover:opacity-100 disabled:cursor-not-allowed"
+                          className="absolute right-2 top-2 rounded-full bg-red-600 p-2 text-white opacity-100 shadow transition sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

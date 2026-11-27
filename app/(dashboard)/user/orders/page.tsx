@@ -1,16 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Package,
   ShoppingBag,
   ArrowRight,
   RefreshCw,
 } from "lucide-react";
 
-import { useOrders } from "@/hooks/useOrders";
+import { usePaginatedOrders } from "@/hooks/useOrders";
 import { Button } from "@/components/ui/button";
 import { formatBDT } from "@/lib/currency";
 
@@ -43,13 +46,25 @@ function getStatusClass(status: string) {
 }
 
 export default function UserOrdersPage() {
+  const [page, setPage] = useState(1);
+
   const {
-    data: orders = [],
+    data: ordersResponse,
     isLoading,
     isError,
     refetch,
     isFetching,
-  } = useOrders();
+  } = usePaginatedOrders({ page, limit: 10 });
+
+  const orders = ordersResponse?.data ?? [];
+  const pagination = ordersResponse?.pagination ?? {
+    currentPage: page,
+    limit: 10,
+    total: orders.length,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: page > 1,
+  };
 
   // Loading
   if (isLoading) {
@@ -341,6 +356,36 @@ export default function UserOrdersPage() {
           );
         })}
       </div>
+
+      {pagination.totalPages > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white px-4 py-3 text-xs text-muted-foreground">
+          <span>
+            Page {pagination.currentPage} of {pagination.totalPages} ({pagination.total} orders)
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!pagination.hasPreviousPage || isFetching}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              Previous
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!pagination.hasNextPage || isFetching}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

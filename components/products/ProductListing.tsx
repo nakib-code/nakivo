@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Loader2,
   Search,
   SlidersHorizontal,
@@ -32,6 +34,11 @@ interface ProductListingProps {
   initialSearch: string;
   initialCategory: string;
   initialSort?: string;
+  pagination?: {
+    page: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 type SortOption =
@@ -60,7 +67,11 @@ export default function ProductListing({
   initialSearch,
   initialCategory,
   initialSort = "default",
+  pagination,
 }: ProductListingProps) {
+  const currentPage = pagination?.page ?? 1;
+  const totalProducts = pagination?.total ?? products.length;
+  const totalPages = pagination?.totalPages ?? 1;
   const router = useRouter();
   const filterRef = useRef<HTMLDivElement>(null);
   const hydrated = useCartHydrated();
@@ -183,6 +194,15 @@ export default function ProductListing({
         params.set("sort", sort);
       }
 
+      const filtersUnchanged =
+        trimmedSearch === initialSearch.trim() &&
+        selectedCategory === normalizedInitialCategory &&
+        sort === normalizedInitialSort;
+
+      if (filtersUnchanged && currentPage > 1) {
+        params.set("page", String(currentPage));
+      }
+
       const query = params.toString();
 
       const nextUrl = query ? `/products?${query}` : "/products";
@@ -197,7 +217,30 @@ export default function ProductListing({
     return () => {
       clearTimeout(timeout);
     };
-  }, [search, selectedCategory, sort, router]);
+  }, [
+    search,
+    selectedCategory,
+    sort,
+    router,
+    initialSearch,
+    normalizedInitialCategory,
+    normalizedInitialSort,
+    currentPage,
+  ]);
+
+  const navigateToPage = (targetPage: number) => {
+    const params = new URLSearchParams();
+    const trimmedSearch = search.trim();
+    if (trimmedSearch) params.set("search", trimmedSearch);
+    if (selectedCategory && selectedCategory !== "all") {
+      params.set("category", selectedCategory);
+    }
+    if (sort && sort !== "default") params.set("sort", sort);
+    if (targetPage > 1) params.set("page", String(targetPage));
+
+    const query = params.toString();
+    router.push(query ? `/products?${query}` : "/products");
+  };
 
   // =========================================
   // SORT
@@ -779,8 +822,8 @@ export default function ProductListing({
             text-slate-600
           "
         >
-          {sortedProducts.length}{" "}
-          {sortedProducts.length === 1 ? "Product" : "Products"}
+          {totalProducts}{" "}
+          {totalProducts === 1 ? "Product" : "Products"}
         </span>
       </section>
 
@@ -861,21 +904,59 @@ export default function ProductListing({
           </div>
         </section>
       ) : (
-        <div
-          className="
-    grid
-    grid-cols-2
-    gap-3
-    sm:gap-5
-    lg:grid-cols-3
-    xl:grid-cols-4
-    2xl:gap-6
-  "
-        >
-          {sortedProducts.map((product) => (
-            <ProductCard key={product._id} product={product} />
-          ))}
-        </div>
+        <>
+          <div
+            className="
+              grid
+              grid-cols-2
+              gap-3
+              sm:gap-5
+              lg:grid-cols-3
+              xl:grid-cols-4
+              2xl:gap-6
+            "
+          >
+            {sortedProducts.map((product) => (
+              <ProductCard key={product._id} product={product} />
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <nav
+              aria-label="Products pagination"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
+            >
+              <p className="text-slate-600">
+                Page <span className="font-semibold text-slate-950">{currentPage}</span> of{" "}
+                <span className="font-semibold text-slate-950">{totalPages}</span> ({totalProducts} products)
+              </p>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage <= 1}
+                  onClick={() => navigateToPage(Math.max(1, currentPage - 1))}
+                >
+                  <ChevronLeft className="mr-1 h-4 w-4" />
+                  Previous
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => navigateToPage(Math.min(totalPages, currentPage + 1))}
+                >
+                  Next
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+              </div>
+            </nav>
+          )}
+        </>
       )}
     </div>
   );

@@ -2,13 +2,16 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { getAllCategories } from "@/service/category/category.service";
-import { getProducts } from "@/service/product.service";
+import { getProductsPaginated } from "@/service/product.service";
 import { getWebsiteSettings } from "@/service/settings/website-settings.service";
 import CategoryProducts from "@/components/category/CategoryProducts";
 
 interface CategoryPageProps {
   params: Promise<{
     slug: string;
+  }>;
+  searchParams: Promise<{
+    page?: string;
   }>;
 }
 
@@ -34,8 +37,16 @@ export async function generateMetadata({
   };
 }
 
-export default async function CategoryPage({ params }: CategoryPageProps) {
-  const { slug } = await params;
+export default async function CategoryPage({
+  params,
+  searchParams,
+}: CategoryPageProps) {
+  const [{ slug }, queryParams] = await Promise.all([params, searchParams]);
+  const parsedPage = Number(queryParams.page);
+  const currentPage =
+    Number.isFinite(parsedPage) && parsedPage >= 1
+      ? Math.floor(parsedPage)
+      : 1;
 
   const rawCategories = await getAllCategories();
 
@@ -53,8 +64,9 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     image: rawCategory.image ?? "",
   };
 
-  const products = await getProducts({
+  const { products, total, page, totalPages } = await getProductsPaginated({
     category: category.name,
+    page: currentPage,
     limit: 24,
   });
 
@@ -70,7 +82,11 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
         xl:px-10
         2xl:px-12"
     >
-      <CategoryProducts category={category} products={products} />
+      <CategoryProducts
+        category={category}
+        products={products}
+        pagination={{ page, total, totalPages }}
+      />
     </div>
   );
 }

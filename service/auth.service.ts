@@ -100,6 +100,9 @@ export async function findOrCreateGoogleUser(
       ...data,
       email: normalizedEmail,
     });
+  } else if (user.provider !== "google") {
+    // Prevent silent linking between unverified credentials accounts and Google OAuth
+    throw new Error("OAuthAccountNotLinked");
   }
 
   // Do not allow blocked users to sign in with Google.

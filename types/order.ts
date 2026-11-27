@@ -67,6 +67,7 @@ export interface CreateOrderPayload {
   comboBundles?: CreateComboBundlePayload[];
   shippingAddress: ShippingAddress;
   paymentMethod: PaymentMethod;
+  idempotencyKey?: string;
 }
 
 // ==================================================

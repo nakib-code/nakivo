@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
 import ProductCard from "@/components/products/ProductCard";
 import { TrackViewItemList } from "@/components/marketing/EcommerceTrackers";
 import { getActiveFlashSalePricing } from "@/lib/flash-sale";
@@ -14,12 +17,21 @@ interface Category {
 interface CategoryProductsProps {
   category: Category;
   products: IProduct[];
+  pagination?: {
+    page: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 export default function CategoryProducts({
   category,
   products,
+  pagination,
 }: CategoryProductsProps) {
+  const totalCount = pagination?.total ?? products.length;
+  const currentPage = pagination?.page ?? 1;
+  const totalPages = pagination?.totalPages ?? 1;
   return (
     <section
     className="mt-5"
@@ -110,7 +122,7 @@ export default function CategoryProducts({
               sm:text-sm
             "
           >
-            {products.length} Products
+            {totalCount} {totalCount === 1 ? "Product" : "Products"}
           </span>
         </div>
       </div>
@@ -160,26 +172,72 @@ export default function CategoryProducts({
           </div>
         </div>
       ) : (
-        <div
-          className="
-            grid
-            grid-cols-2
-            gap-2.5
-            sm:gap-6
-            lg:grid-cols-3
-            lg:gap-6
-            xl:grid-cols-4
-            xl:gap-7
-            2xl:gap-8
-          "
-        >
-          {products.map((product) => (
-            <ProductCard
-              key={product._id}
-              product={product}
-            />
-          ))}
-        </div>
+        <>
+          <div
+            className="
+              grid
+              grid-cols-2
+              gap-2.5
+              sm:gap-6
+              lg:grid-cols-3
+              lg:gap-6
+              xl:grid-cols-4
+              xl:gap-7
+              2xl:gap-8
+            "
+          >
+            {products.map((product) => (
+              <ProductCard
+                key={product._id}
+                product={product}
+              />
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <nav
+              aria-label="Category pagination"
+              className="mt-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
+            >
+              <p className="text-slate-600">
+                Page <span className="font-semibold text-slate-950">{currentPage}</span> of{" "}
+                <span className="font-semibold text-slate-950">{totalPages}</span> ({totalCount} products)
+              </p>
+
+              <div className="flex items-center gap-2">
+                {currentPage > 1 ? (
+                  <Link
+                    href={`/category/${category.slug}?page=${currentPage - 1}`}
+                    className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-800 transition hover:bg-slate-50"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </Link>
+                ) : (
+                  <span className="inline-flex cursor-not-allowed items-center gap-1 rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-400">
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </span>
+                )}
+
+                {currentPage < totalPages ? (
+                  <Link
+                    href={`/category/${category.slug}?page=${currentPage + 1}`}
+                    className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-800 transition hover:bg-slate-50"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Link>
+                ) : (
+                  <span className="inline-flex cursor-not-allowed items-center gap-1 rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-400">
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </span>
+                )}
+              </div>
+            </nav>
+          )}
+        </>
       )}
     </section>
   );

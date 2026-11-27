@@ -1,4 +1,8 @@
-import { getUsers } from "@/service/users/users.api";
+import {
+  getUsers,
+  getUsersPaginated,
+  type GetUsersParams,
+} from "@/service/users/users.api";
 import {
   useQuery,
   useMutation,
@@ -15,20 +19,19 @@ import { toast } from "sonner";
 // =========================
 
 export function useGetUsers() {
-
   return useQuery({
-
-    queryKey:[
-      "users",
-    ],
-
-    queryFn:getUsers,
-
-    staleTime:
-      1000 * 60 * 5,
-
+    queryKey: ["users"],
+    queryFn: getUsers,
+    staleTime: 1000 * 60 * 5,
   });
+}
 
+export function usePaginatedUsers(params: GetUsersParams = {}) {
+  return useQuery({
+    queryKey: ["users", "paginated", params],
+    queryFn: () => getUsersPaginated(params),
+    staleTime: 1000 * 60 * 5,
+  });
 }
 
 

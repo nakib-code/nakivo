@@ -5,6 +5,7 @@ import { isValidObjectId } from "mongoose";
 import { requireAdmin } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import { isValidProductPlacement } from "@/lib/product-placement";
+import Category from "@/models/Category";
 import Product from "@/models/Product";
 import { deleteFromCloudinary, uploadToCloudinary } from "@/lib/cloudinary";
 
@@ -47,6 +48,20 @@ export async function GET(req: NextRequest) {
     const idsParam = searchParams.get("ids");
     const includeStats = searchParams.get("includeStats") === "true";
     const isAdminScope = searchParams.get("scope") === "admin" || includeStats;
+
+    if (isAdminScope) {
+      const auth = await requireAdmin();
+
+      if (!auth.authorized) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: auth.message,
+          },
+          { status: auth.status }
+        );
+      }
+    }
 
     const pageValue = searchParams.get("page");
     const limitValue = searchParams.get("limit");
@@ -631,6 +646,15 @@ export async function POST(req: NextRequest) {
     revalidatePath("/");
     revalidatePath("/products");
     revalidatePath("/combo");
+
+    try {
+      const cat = await Category.findOne({ name: category }).select("slug").lean();
+      if (cat?.slug) {
+        revalidatePath(`/category/${cat.slug}`);
+      }
+    } catch (revalError) {
+      console.error("Product Create Category Revalidation Error:", revalError);
+    }
 
     // ========================================
     // Response
